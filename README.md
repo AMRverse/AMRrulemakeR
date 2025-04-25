@@ -8,45 +8,28 @@
 
 The goal of AMRrulesR is to …
 
-## Installation
+## Getting Started
 
-You can install the development version of AMRrulesR from
-[GitHub](https://github.com/) with:
+To install and explore the package, follow the instructions below:
 
-``` r
-# install.packages("pak")
-pak::pak("katholt/AMRrulesR")
+### Installation
+Note that this package requires the latest version of the `AMR` and `AMRgen` packages.
+
+Install the latest version of these with:
+```r
+install.packages("remotes") # if you haven't already
+remotes::install_github("msberends/AMR")
+remotes::install_github("interpretAMR/AMRgen")
 ```
 
-## Example
-
-This is a basic example which shows you how to solve a common problem:
-
-``` r
-library(AMRrulesR)
-## basic example code
+Then install this package
+```r
+# Install from GitHub
+remotes::install_github("katholt/AMRrulesR")
 ```
 
-What is special about using `README.Rmd` instead of just `README.md`?
-You can include R chunks like so:
+It is best to restart R before running the installation. If you didn't do this and/or you encounter issues with the examples below after install, it may help to also restart after the install and start fresh with the examples below.
 
-``` r
-summary(cars)
-#>      speed           dist       
-#>  Min.   : 4.0   Min.   :  2.00  
-#>  1st Qu.:12.0   1st Qu.: 26.00  
-#>  Median :15.0   Median : 36.00  
-#>  Mean   :15.4   Mean   : 42.98  
-#>  3rd Qu.:19.0   3rd Qu.: 56.00  
-#>  Max.   :25.0   Max.   :120.00
-```
 
-You’ll still need to render `README.Rmd` regularly, to keep `README.md`
-up-to-date. `devtools::build_readme()` is handy for this.
-
-You can also embed plots, for example:
-
-<img src="man/figures/README-pressure-1.png" width="100%" />
-
-In that case, don’t forget to commit and push the resulting figure
-files, so they display on GitHub and CRAN.
+### Examples
+TBD
