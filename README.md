@@ -37,7 +37,7 @@ remotes::install_github("interpretAMR/AMRgen")
 Then install this package
 ```r
 # Install from GitHub
-remotes::install_github("katholt/AMRrulesR")
+remotes::install_github("interpretAMR/AMRrulesR")
 ```
 
 It is best to restart R before running the installation. If you didn't do this and/or you encounter issues with the examples below after install, it may help to also restart after the install and start fresh with the examples below.
