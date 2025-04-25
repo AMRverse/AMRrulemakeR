@@ -44,4 +44,14 @@ It is best to restart R before running the installation. If you didn't do this a
 
 
 ### Examples
-TBD
+```r
+# run quantitative analyses
+cip_analysis <- amrrules_analysis(afp, ast, antibiotic="Cipro", drug_class_list=c("Quinolones"), species="E. coli")
+
+cip_analysis$ppv_plot
+cip_analysis$upset_mic_plot
+cip_analysis$upset_disk_plot
+
+# save tables and plots and generate rules
+cip_rules <- amrrules_save(cip_analysis, bp_site="Non-meningitis", dir_path="amrrules", file_prefix="Cipro")
+```
