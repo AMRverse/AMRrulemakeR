@@ -45,8 +45,13 @@ It is best to restart R before running the installation. If you didn't do this a
 
 ### Examples
 ```r
+
+# example data from AMRgen package: E. coli MIC data from NCBI, matching AMRfinderplus data
+ecoli_ast
+ecoli_geno <- import_amrfp(ecoli_geno_raw, "Name")
+
 # run quantitative analyses
-cip_analysis <- amrrules_analysis(afp, ast, antibiotic="Cipro", drug_class_list=c("Quinolones"), species="E. coli")
+cip_analysis <- amrrules_analysis(ecoli_geno, ecoli_ast, antibiotic="Cipro", drug_class_list=c("Quinolones"), species="E. coli")
 
 cip_analysis$ppv_plot
 cip_analysis$upset_mic_plot
