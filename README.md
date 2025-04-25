@@ -1,5 +1,7 @@
+<img src="AMRrules_logo.png" width="200" align="left">
 
 # AMRrulesR: Apply or Define AMRrules for Interpreting AMR Genotypes
+
 
 This package is in early development. Its purpose will be to apply or define AMRrules, which specify how the presence of an antimicrobial resistance (AMR) marker in the genome of a given bacterial species should be interpreted in terms of the expected phenotype.
 
