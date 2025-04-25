@@ -138,7 +138,7 @@ amrrules_analysis <- function(geno_table, pheno_table, antibiotic, drug_class_li
   reference_mic_plot <- safe_execute(ggplot2::autoplot(reference_mic, ab = antibiotic, mo = species, title = "EUCAST reference MIC distribtion"))
 
   reference_disk <- safe_execute(AMRgen::get_eucast_disk_distribution(antibiotic, species))
-  reference_disk <- safe_execute(rep(reference_disk$mic, reference_disk$count))
+  reference_disk <- safe_execute(rep(reference_disk$disk_diffusion, reference_disk$count))
   reference_disk_plot <- safe_execute(ggplot2::autoplot(reference_disk, ab = antibiotic, mo = species, title = "EUCAST reference disk zone distribtion"))
 
   summary <- safe_execute(summarise_data(geno_table, pheno_table, antibiotic=antibiotic, drug_class_list=drug_class_list, geno_sample_col=geno_sample_col, pheno_sample_col=pheno_sample_col))
