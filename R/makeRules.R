@@ -65,9 +65,17 @@ makerules <- function(amrrules, minObs=3, weak_threshold=20, core_threshold=0.9,
 
   print(paste("Generating AMRrules for", antibiotic, "in", species))
 
-  # check if this drug is an expected resistance in this species
+  # check if this drug is an expected R or I in this species
   expected_R <- as.ab(antibiotic) %in% (intrinsic_resistant %>% filter(mo==as.mo(species)) %>% pull(ab))
   if (expected_R) {print(paste(antibiotic,"is an expected resistance for",species))}
+
+  expected_I <- FALSE
+  if(!expected_R) { # if expected I, the MIC S breakpoint is set to 0.001 (i.e. there is effectively no S category as all isolates exceed this value)
+    bp_mic <-checkBreakpoints(species, guide, antibiotic, bp_site, "", assay="MIC")
+    if (bp_mic$breakpoint_S==0.001) {expected_I <- TRUE}
+    bp_disk <-checkBreakpoints(species, guide, antibiotic, bp_site, "", assay="DISK")
+    if (bp_disk$breakpoint_S==50) {expected_I <- TRUE}
+  }
 
   check_ruleID_start <- as.integer(ruleID_start)
   if(is.na(check_ruleID_start)) {stop(paste("Need valid integer to start numbering rules, specified via 'ruleID_start':", ruleID_start,"is not valid"))}
@@ -131,9 +139,11 @@ makerules <- function(amrrules, minObs=3, weak_threshold=20, core_threshold=0.9,
       print("'use_disk' set to TRUE but the disk summary data ($upset_disk_summary) in the input object is empty")
       use_disk=F
     }
+  }
 
+  if (use_disk) {
     if (is.null(disk_S) | is.null(disk_R)) { # determine disk diffusion breakpoints
-      bp <-checkBreakpoints(species, guide, antibiotic, bp_site, bp_standard_mic, assay="DISK")
+      bp <-checkBreakpoints(species, guide, antibiotic, bp_site, bp_standard_disk, assay="DISK")
       disk_S <- bp$breakpoint_S
       disk_R <- bp$breakpoint_R
       bp_standard_disk <- bp$bp_standard
@@ -150,7 +160,6 @@ makerules <- function(amrrules, minObs=3, weak_threshold=20, core_threshold=0.9,
       }
     }
     else{print(paste("Using user-specified disk ECOFF:", disk_ecoff))}
-
   }
 
   # start with solo PPV data (for individual markers, found solo in at least minObs genomes)
@@ -182,8 +191,11 @@ makerules <- function(amrrules, minObs=3, weak_threshold=20, core_threshold=0.9,
       filter(marker_list!="") %>%
       filter(!is.na(median) & n>=minObs) %>%
       rename_with(~paste0("MIC.", .x))
-    data <- data %>% full_join(mic_data, join_by(marker==MIC.marker_list))
+
+    data <- data %>% full_join(mic_data, join_by(marker==MIC.marker_list)) %>%
+      mutate(mic_note=paste0("MIC: median ",MIC.median," [IQR ",MIC.q25,"-",MIC.q75,"]","; n=",MIC.n, ". "))
   }
+  else {data <- data %>% mutate(MIC.median=NA, MIC.n=NA, mic_note=NA)}
 
   # add disk data (for individual markers and combinations, with at least minObs genomes)
   if (use_disk) {
@@ -191,8 +203,11 @@ makerules <- function(amrrules, minObs=3, weak_threshold=20, core_threshold=0.9,
       filter(marker_list!="") %>%
       filter(!is.na(median) & n>=minObs) %>%
       rename_with(~paste0("Disk.", .x))
-    data <- data %>% full_join(disk_data, join_by(marker==Disk.marker_list))
+
+    data <- data %>% full_join(disk_data, join_by(marker==Disk.marker_list)) %>%
+      mutate(disk_note=paste0("Disk: median ",Disk.median," [IQR ",Disk.q25,"-",Disk.q75,"]","; n=",Disk.n, ". "))
   }
+  else {data <- data %>% mutate(Disk.median=NA, Disk.n=NA, disk_note=NA)}
 
   # add rules for any markers called, but not already accounted for (ie not found solo or with logistic regression data)
   col <- colnames(amrrules$amr_binary) # get column names
@@ -228,7 +243,7 @@ makerules <- function(amrrules, minObs=3, weak_threshold=20, core_threshold=0.9,
   }
   if (use_mic & !expected_R) {
     data <- data %>%
-      mutate(phenotype_soloPPV=if_else(category_soloPPV=="I" & mic_S==0.001, "wildtype", phenotype_soloPPV)) # if expected I, the MIC S breakpoint is set to 0.001 (i.e. there is effectively no S category as all isolates exceed this value)
+      mutate(phenotype_soloPPV=if_else(category_soloPPV=="I" & expected_I, "wildtype", phenotype_soloPPV))
   }
 
   # clinical category based on logistic regression (individual markers without solo PPV)
@@ -237,9 +252,10 @@ makerules <- function(amrrules, minObs=3, weak_threshold=20, core_threshold=0.9,
       mutate(category_logRegNWT=if_else(is.na(category_soloPPV) & LogRegNWT.pval>0.05 & LogRegNWT.ci.lower<0 & LogRegNWT.ci.upper>0, "S", NA)) %>%
       mutate(category_logReg = if_else(category_logReg=="S" & category_logRegNWT=="S", "S", NA)) %>%
       mutate(phenotype_logReg=if_else(category_logReg=="S", "wildtype", NA)) %>%
-      mutate(category_logReg = if_else(category_logReg=="S" & mic_S==0.001, "I", category_logReg)) %>%
+      mutate(category_logReg = if_else(category_logReg=="S" & expected_I, "I", category_logReg)) %>%
       select(-category_logRegNWT)
   }
+  else {data <- data %>% mutate(category_logReg=NA, phenotype_logReg=NA)}
 
   # call category and phenotype from MIC (individual markers and combinations)
   if (use_mic) {
@@ -252,6 +268,7 @@ makerules <- function(amrrules, minObs=3, weak_threshold=20, core_threshold=0.9,
                                            MIC.median>mic_ecoff ~ "nonwildtype",
                                            TRUE ~ "wildtype"))
   }
+  else {data <- data %>% mutate(category_MIC=NA, phenotype_MIC=NA, MIC.median=NA)}
 
   # call category and phenotype from disk (individual markers and combinations)
   if (use_disk) {
@@ -264,6 +281,7 @@ makerules <- function(amrrules, minObs=3, weak_threshold=20, core_threshold=0.9,
                                     Disk.median<disk_ecoff ~ "nonwildtype",
                                    TRUE ~ "wildtype"))
   }
+  else {data <- data %>% mutate(category_disk=NA, phenotype_disk=NA, Disk.median=NA)}
 
 
   ## compare calls from different sources, note discrepancies (NOTE: could prioritise evidence from MIC vs disk based on count?)
@@ -278,7 +296,7 @@ makerules <- function(amrrules, minObs=3, weak_threshold=20, core_threshold=0.9,
     mutate(catnote = if_else(use_disk & !is.na(category_disk) & `clinical category`==category_disk, paste(catnote, "Disk."), catnote)) %>%
     mutate(catnote = if_else(use_mic & !is.na(category_MIC) & `clinical category`!=category_MIC, paste(catnote, "MIC disagrees."), catnote)) %>%
     mutate(catnote = if_else(use_disk & !is.na(category_disk) & `clinical category`!=category_disk, paste(catnote, "Disk disagrees."), catnote)) %>%
-    mutate(catnote = if_else(!is.na(category_logReg) & is.na(category_soloPPV) & is.na(category_disk) & is.na(category_MIC),
+    mutate(catnote = if_else(regression & !is.na(category_logReg) & is.na(category_soloPPV) & is.na(category_disk) & is.na(category_MIC),
                              "logistic regression.", catnote)) %>%
     mutate(catnote = sub("^\\s+", "", catnote))%>%
     mutate(phenotype = case_when(use_mic & !is.na(phenotype_MIC) ~ phenotype_MIC,
@@ -290,7 +308,7 @@ makerules <- function(amrrules, minObs=3, weak_threshold=20, core_threshold=0.9,
     mutate(phenote = if_else(use_disk & !is.na(phenotype_disk) & phenotype==phenotype_disk, paste(phenote, "Disk."), phenote)) %>%
     mutate(phenote = if_else(((!use_mic & !use_disk) | (is.na(phenotype_disk) & is.na(phenotype_MIC))) & !is.na(category_soloPPV), paste(phenote, "Solo PPV."), phenote)) %>%
     mutate(phenote = if_else(use_mic & use_disk & !is.na(phenotype_disk) & !is.na(phenotype_MIC) & phenotype_disk!=phenotype_MIC, paste(phenote, "Disk disagrees."), phenote)) %>%
-    mutate(phenote = if_else(!is.na(category_logReg) & is.na(category_soloPPV) & is.na(category_disk) & is.na(category_MIC),
+    mutate(phenote = if_else(regression & !is.na(category_logReg) & is.na(category_soloPPV) & is.na(category_disk) & is.na(category_MIC),
                              "logistic regression.", phenote)) %>%
     mutate(phenote = sub("^\\s+", "", phenote))
 
@@ -338,7 +356,8 @@ makerules <- function(amrrules, minObs=3, weak_threshold=20, core_threshold=0.9,
 
   # gene info
   gene_info <- amrrules$afp_hits %>%
-    rename(nodeID=`Hierarchy node`, `HMM accession`=`HMM id`) %>%
+    rename(nodeID=`Hierarchy node`) %>%
+    mutate(`HMM accession` = if ("HMM id" %in% names(.)) .data[["HMM id"]] else rep(NA, n())) %>%
     separate(marker, into = c("gene", "mutation"), sep = "_", remove=F, fill="right") %>%
     mutate(gene=if_else(`Element subtype`=="POINT", gene, as.character(marker))) %>%
     mutate(mutation=if_else(`Element subtype`=="POINT", mutation, NA)) %>%
@@ -353,31 +372,45 @@ makerules <- function(amrrules, minObs=3, weak_threshold=20, core_threshold=0.9,
 
   ## source info
   # summarise sources of pheno data used to calculate solo PPV for each marker
-  solo_sources <- amrrules$solo_binary %>%
-    filter(!is.na(pheno) & !is.na(marker) & value==1) %>%
-    select(source, marker) %>% distinct() %>%
-    group_by(marker) %>% count(name="solo.sources")
+  if ("source" %in% colnames(amrrules$solo_binary)) {
+    solo_sources <- amrrules$solo_binary %>%
+      filter(!is.na(pheno) & !is.na(marker) & value==1) %>%
+      select(source, marker) %>% distinct() %>%
+      group_by(marker) %>% count(name="solo.sources")
 
-  solo_sources_per_pheno <- amrrules$solo_binary %>%
-    filter(!is.na(pheno) & !is.na(marker) & value==1) %>%
-    select(source, marker, pheno) %>% distinct() %>%
-    group_by(marker, pheno) %>% count(name="sources") %>%
-    pivot_wider(names_from=pheno, names_prefix="solo.sources.", values_from=sources) %>%
-    mutate(across(everything(), ~ ifelse(is.na(.), 0, .)))
+    solo_sources_per_pheno <- amrrules$solo_binary %>%
+      filter(!is.na(pheno) & !is.na(marker) & value==1) %>%
+      select(source, marker, pheno) %>% distinct() %>%
+      group_by(marker, pheno) %>% count(name="sources") %>%
+      pivot_wider(names_from=pheno, names_prefix="solo.sources.", values_from=sources) %>%
+      mutate(across(everything(), ~ ifelse(is.na(.), 0, .)))
 
-  data <- data %>% left_join(solo_sources, by="marker") %>%
-    left_join(solo_sources_per_pheno, by="marker")
+    data <- data %>% left_join(solo_sources, by="marker") %>%
+      left_join(solo_sources_per_pheno, by="marker")
 
-  if (use_mic) {
-    data <- data %>% rowwise() %>% mutate(source_info=getSources(amrrules$amr_binary, marker, "mic")) %>% unnest_wider(source_info) %>% ungroup()
+    if (use_mic) {
+      data <- data %>% rowwise() %>% mutate(source_info=getSources(amrrules$amr_binary, marker, "mic")) %>% unnest_wider(source_info) %>% ungroup()
+    }
+
+    if (use_disk) {
+      data <- data %>% rowwise() %>% mutate(source_info=getSources(amrrules$amr_binary, marker, "disk")) %>% unnest_wider(source_info) %>% ungroup()
+    }
+
+    source_names <- c("sources", "sources.S", "sources.I", "sources.R")
+    data <- add_missing_cols(data, c(paste0("solo.",source_names))) %>%
+      mutate(solo.sources.SIR = if_else(!is.na(solo.sources),
+                                        paste0(na0(solo.sources.S), " S, ", na0(solo.sources.I), " I, ", na0(solo.sources.R), " R"),
+                                        "-")) %>%
+      mutate(mic.sources.SIR = if_else(!is.na(mic.sources) & use_mic,
+                                       paste0(na0(mic.sources.S), " S, ", na0(mic.sources.I), " I, ", na0(mic.sources.R), " R"),
+                                       "-")) %>%
+      mutate(disk.sources.SIR = if_else(!is.na(disk.sources) & use_disk,
+                                        paste0(na0(disk.sources.S), " S, ", na0(disk.sources.I), " I, ", na0(disk.sources.R), " R"),
+                                        "-"))
   }
-
-  if (use_disk) {
-    data <- data %>% rowwise() %>% mutate(source_info=getSources(amrrules$amr_binary, marker, "disk")) %>% unnest_wider(source_info) %>% ungroup()
+  else {
+    data <- add_missing_cols(data, c("solo.sources", "solo.sources.SIR", "mic.sources", "mic.sources.SIR", "disk.sources", "disk.sources.SIR"))
   }
-
-  source_names <- c("sources", "sources.S", "sources.I", "sources.R")
-  data <- add_missing_cols(data, c(paste0("solo.",source_names)))
 
   rules <- data %>% left_join(gene_info, by="marker") %>%
     mutate(gene=if_else(marker_count>1, gene.x, gene.y)) %>% # pull gene from ruleID combination for combo rules, otherwise gene name from gene_info
@@ -386,12 +419,12 @@ makerules <- function(amrrules, minObs=3, weak_threshold=20, core_threshold=0.9,
     mutate(category_from_disk = if_else(grepl("Disk. MIC disagrees.", catnote), TRUE, FALSE)) %>%
     mutate(breakpoint=case_when(!category_from_disk & `clinical category`=="S" ~ paste("MIC <=", mic_S, "mg/L"),
                                 !category_from_disk & `clinical category`=="R" ~ paste("MIC >", mic_R, "mg/L"),
-                                !category_from_disk & `clinical category`=="I" & mic_S==0.001 ~ paste("MIC <=", mic_R, "mg/L"),
-                                !category_from_disk & `clinical category`=="I" & mic_S!=0.001 ~ paste("MIC >", mic_S, "& <=", mic_R, "mg/L"),
+                                !category_from_disk & `clinical category`=="I" & expected_I ~ paste("MIC <=", mic_R, "mg/L"),
+                                !category_from_disk & `clinical category`=="I" & !expected_I ~ paste("MIC >", mic_S, "& <=", mic_R, "mg/L"),
                                 category_from_disk & `clinical category`=="S" ~ paste("disk zone >=", disk_S, "mm"),
                                 category_from_disk & `clinical category`=="R" ~ paste("disk zone <", disk_R, "mm"),
-                                category_from_disk & `clinical category`=="I" & mic_S==50 ~ paste("disk zone >", mic_R, "mmL"),
-                                category_from_disk & `clinical category`=="I" & mic_S!=50 ~ paste("disk zone <", mic_S, "& >=", disk_R, "mm"),
+                                category_from_disk & `clinical category`=="I" & expected_I ~ paste("disk zone >=", disk_R, "mm"),
+                                category_from_disk & `clinical category`=="I" & !expected_I ~ paste("disk zone >=", disk_R, "& <", disk_S, "mm"),
                                 TRUE ~ "-"
     )) %>%
     mutate(`breakpoint standard`=case_when(!category_from_disk ~ paste0(guide, bp_standard_mic),
@@ -406,16 +439,20 @@ makerules <- function(amrrules, minObs=3, weak_threshold=20, core_threshold=0.9,
     mutate(`rule curation note`=if_else(!is.na(NWT.ppv),
                                paste0(`rule curation note`, "NWT PPV=", round(NWT.ppv,2)*100, "% (",NWT.ppv.x,"/",NWT.ppv.n,"). "),
                                `rule curation note`)) %>%
-    mutate(`rule curation note`=if_else(!is.na(R.ppv),
-                                        paste0(`rule curation note`, na0(solo.sources), " datasets (", na0(solo.sources.S), " S, ", na0(solo.sources.I), " I, ", na0(solo.sources.R), " R). "),
-                                        `rule curation note`)) %>%
+    mutate(`rule curation note`=if_else(!is.na(R.ppv) & !is.na(solo.sources),
+                                        paste0(`rule curation note`, solo.sources, " solo datasets: ", solo.sources.SIR, ". "),
+                                        `rule curation note`))  %>%
     mutate(`rule curation note`=if_else(use_mic & !is.na(MIC.median),
-                                        paste0(`rule curation note`, "MIC: median ",MIC.median," [IQR ",MIC.q25,"-",MIC.q75,"]","; n=",MIC.n, ", ",
-                                               na0(mic.sources), " datasets (", na0(mic.sources.S), " S, ", na0(mic.sources.I), " I, ", na0(mic.sources.R), " R). "),
+                                        paste0(`rule curation note`, mic_note),
+                                        `rule curation note`))%>%
+    mutate(`rule curation note`=if_else(use_mic & !is.na(MIC.median) & !is.na(mic.sources),
+                                        paste0(`rule curation note`, mic.sources, " MIC datasets: ", mic.sources.SIR, ". "),
                                         `rule curation note`)) %>%
     mutate(`rule curation note`=if_else(use_disk & !is.na(Disk.median),
-                                        paste0(`rule curation note`, "Disk: median ",Disk.median," [IQR ",Disk.q25,"-",Disk.q75,"]","; n=",Disk.n, ", ",
-                                               na0(disk.sources), " datasets (", na0(disk.sources.S), " S, ", na0(disk.sources.I), " I, ", na0(disk.sources.R), " R). "),
+                                        paste0(`rule curation note`, disk_note),
+                                        `rule curation note`)) %>%
+    mutate(`rule curation note`=if_else(use_disk & !is.na(Disk.median) & !is.na(disk.sources),
+                                        paste0(`rule curation note`, disk.sources, " disk datasets: ", disk.sources.SIR, ". "),
                                         `rule curation note`)) %>%
     mutate(`rule curation note`=if_else(grepl("regression", catnote) & !is.na(LogRegR.est),
                                         paste0(`rule curation note`, "OR for R: ", round(exp(LogRegR.est),3), " [", round(exp(LogRegR.ci.lower),3),"-", round(exp(LogRegR.ci.upper),3),"], p=", sprintf("%.3e", LogRegR.pval), ". "),
@@ -436,25 +473,16 @@ makerules <- function(amrrules, minObs=3, weak_threshold=20, core_threshold=0.9,
                                         TRUE ~ "")) %>%
     mutate(`evidence limitations`=paste0(`evidence limitations`, source_limitations)) %>%
     mutate(date_stamp=format(Sys.time(), "%Y-%m-%d %H:%M:%S")) %>%
-    mutate(solo.sources.SIR = if_else(!is.na(solo.sources),
-                                      paste0(na0(solo.sources.S), " S, ", na0(solo.sources.I), " I, ", na0(solo.sources.R), " R"),
-                                      "-")) %>%
-    mutate(mic.sources.SIR = if_else(!is.na(mic.sources) & use_mic,
-                                     paste0(na0(mic.sources.S), " S, ", na0(mic.sources.I), " I, ", na0(mic.sources.R), " R"),
-                                     "-")) %>%
-    mutate(disk.sources.SIR = if_else(!is.na(disk.sources) & use_disk,
-                                     paste0(na0(disk.sources.S), " S, ", na0(disk.sources.I), " I, ", na0(disk.sources.R), " R"),
-                                    "-")) %>%
     select(ruleID, organism, gene, nodeID, `HMM accession`, mutation, `variation type`,
            context, drug, phenotype, `clinical category`, breakpoint, `breakpoint standard`,
            `evidence code`, `evidence grade`, `evidence limitations`,
            `rule curation note`, date_stamp,
            # quantitative data columns, not part of rule spec:
-           R.ppv, R.ppv.n, R.ppv.x, NWT.ppv, NWT.ppv.n, NWT.ppv.x, solo.sources, solo.sources.SIR,
-           MIC.median, MIC.n, MIC.q25, MIC.q75, mic.sources, mic.sources.SIR,
-           Disk.median, Disk.n, Disk.q25, Disk.q75, disk.sources, disk.sources.SIR,
-           LogRegR.est, LogRegR.ci.lower, LogRegR.ci.upper, LogRegR.pval,
-           LogRegNWT.est, LogRegNWT.ci.lower, LogRegNWT.ci.upper, LogRegNWT.pval, freq) %>%
+           any_of(c("R.ppv", "R.ppv.n", "R.ppv.x", "NWT.ppv", "NWT.ppv.n", "NWT.ppv.x", "solo.sources", "solo.sources.SIR,
+           MIC.median", "MIC.n", "MIC.q25", "MIC.q75", "mic.sources", "mic.sources.SIR,
+           Disk.median", "Disk.n", "Disk.q25", "Disk.q75", "disk.sources", "disk.sources.SIR,
+           LogRegR.est", "LogRegR.ci.lower", "LogRegR.ci.upper", "LogRegR.pval,
+           LogRegNWT.est", "LogRegNWT.ci.lower", "LogRegNWT.ci.upper", "LogRegNWT.pval", "freq"))) %>%
     mutate(`refseq accession`="-",
            `GenBank accession`="-", .after=nodeID) %>%
     mutate(`ARO accession`="-", .after=`HMM accession`) %>%

@@ -182,7 +182,7 @@ amrrules_analysis <- function(geno_table, pheno_table, antibiotic, drug_class_li
 
   afp_hits <- overlap$geno_matched %>%
     filter(`Element type`=="AMR") %>%
-    select(marker, `Gene symbol`, `Element subtype`, `Hierarchy node`, `HMM id`) %>%
+    select(any_of(c("marker", "Gene symbol", "Element subtype", "Hierarchy node", "HMM id"))) %>%
     distinct()
 
   # add gene frequencies to help define core/accessory
@@ -193,10 +193,10 @@ amrrules_analysis <- function(geno_table, pheno_table, antibiotic, drug_class_li
     select(-n) %>% right_join(afp_hits, by="marker")
 
   # merge geno/pheno and count unique sources per gene + pheno/mic/disk
-  soloPPV$amr_binary <- pheno_table %>% select(id, source, pheno, mic, disk) %>%
+  soloPPV$amr_binary <- pheno_table %>% select(any_of(c("id", "source", "pheno", "mic", "disk"))) %>%
     left_join(soloPPV$amr_binary, by=c("id", "pheno", "mic", "disk"))
 
-  soloPPV$solo_binary <- pheno_table %>% select(id, source, pheno, mic, disk) %>%
+  soloPPV$solo_binary <- pheno_table %>% select(any_of(c("id", "source", "pheno", "mic", "disk"))) %>%
     left_join(soloPPV$solo_binary, by=c("id", "pheno", "mic", "disk"))
 
   return(list(reference_mic_plot=reference_mic_plot,
