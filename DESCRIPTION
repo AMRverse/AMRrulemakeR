@@ -1,13 +1,22 @@
 Package: AMRrulesR
-Title: What the Package Does (One Line, Title Case)
+Title: Apply or Define AMRrules for Interpreting AMR Genotypes
 Version: 0.0.0.9000
 Authors@R: 
-    person("First", "Last", , "first.last@example.com", role = c("aut", "cre"))
-Description: What the package does (one paragraph).
-License: `use_mit_license()`, `use_gpl3_license()` or friends to pick a
-    license
+    person("Kat", "Holt", , "kat.holt@lshtm.ac.uk", role = c("aut", "cre"))
+Description: This package can be used to apply or define AMRrules, which specify how the presence of an antimicrobial resistance (AMR) marker in the genome of a given bacterial species should be interpreted in terms of the expected phenotype.
+License: MIT + file LICENSE
 Encoding: UTF-8
-Roxygen: list(markdown = TRUE)
-RoxygenNote: 7.3.2
 URL: https://github.com/katholt/AMRrulesR
 BugReports: https://github.com/katholt/AMRrulesR/issues
+Imports: 
+    AMR,
+    AMRgen,
+    dplyr,
+  	ggplot2,
+  	tidyr,
+  	magrittr
+Depends: 
+    R (>= 3.5)
+LazyData: true
+RoxygenNote: 7.3.2
+Roxygen: list(markdown = TRUE)

@@ -1,0 +1,50 @@
+library(dplyr)
+library(AMR)
+library(tibble)
+
+organism_codes <- tribble(
+  ~Species, ~`Prefix`,
+  "Achromobacter xylosoxidans", "AXY",
+  "Acinetobacter", "ACI",
+  "Aeromonas", "AER",
+  "Anaerobes", "ANA",
+  "Bordetella", "BOR",
+  "Brucella", "BRU",
+  "Burkholderia cepacia complex", "BCC",
+  "Burkholderia pseudomallei", "BPM",
+  "Campylobacter jejuni", "CAJ",
+  "Campylobacter fetus", "CAF",
+  "Campylobacter coli", "CAC",
+  "Chryseobacterium indologenes", "CIN",
+  "Corynebacterium diphtheriae", "CDP",
+  "E. coli", "ECO",
+  "Shigella", "ECO",
+  "Edwardsiella", "EDW",
+  "Enterobacter cloacae complex", "ECC",
+  "Enterococcus", "ENT",
+  "Haemophilus influenzae", "HIN",
+  "Helicobacter", "HEL",
+  "Klebsiella pneumoniae", "KPN",
+  "Legionella", "LEG",
+  "Listeria", "LIS",
+  "Mycobacterium non-Tb", "MYC",
+  "Mycobacterium tuberculosis", "MTB",
+  "Mycoplasma pneumoniae", "MPN",
+  "Neisseria commensals", "NEI",
+  "Neisseria gonorrhoeae", "NGO",
+  "Neisseria meningitidis", "NMN",
+  "Pasteurella", "PAS",
+  "Proteus mirabilis", "PRM",
+  "Pseudomonas aeruginosa", "PSA",
+  "Salmonella", "SAL",
+  "Serratia", "SER",
+  "Shewanella", "SHW",
+  "Staphylococcus", "STA",
+  "Stenotrophomonas maltophilia", "STM",
+  "Streptococcus", "STR",
+  "Treponema", "TRE",
+  "Vibrio", "VIB",
+  "Yersinia", "YER"
+) %>% mutate(mo=as.mo(Species))
+
+usethis::use_data(organism_codes, overwrite = TRUE)
