@@ -14,7 +14,7 @@ To support the work of defining AMRrules, we have developed the [AMRgen](https:/
 __The `AMRrulesR` package draws on the `AMR` and `AMRgen` package functions to:__
 * summarise the available genotype-phenotype data for a given drug, and the available breakpoints with which to interpret phenotypes, using the `summarise_data` function
 * automate runnning a series of genotype-phenotype analyses (including calcualting solo marker positive predictive value, generating upset plots, calculating distributions for MIC and disk diffusion assay values for individual markers and combinations, logistic regression of markers vs phenotypes etc), using the `amrrules_analysis` function
-* use these quantitative results to draft AMRrules to interpret individual markers or combinations in terms of expected phenotypes (wildtype/nonwildtype) and clinical categories (S/I/R), according to the [AMRrules specification (v0.5)]((https://docs.google.com/spreadsheets/d/1F-J-_8Kyo3W0Oh6eDYyd0N8ahqVwiddM2112-Fg1gKc/edit?usp=sharing)), using the `makerules` function
+* use these quantitative results to draft AMRrules to interpret individual markers or combinations in terms of expected phenotypes (wildtype/nonwildtype) and clinical categories (S/I/R), according to the [AMRrules specification (v0.5)](https://docs.google.com/spreadsheets/d/1F-J-_8Kyo3W0Oh6eDYyd0N8ahqVwiddM2112-Fg1gKc/edit?usp=sharing), using the `makerules` function
 * the function `amrrules_save` automates saving the quantitative results to files (TSV tables, PDF figures), and generating and saving AMRrules
 
 During 2025, as the rules are deveoped, functions will be added to interpret AMRfinderplus genotyping results into inferred phenotypes, using the AMRrules defined by the ESGEM-AMR Working Group.
