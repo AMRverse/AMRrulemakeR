@@ -438,6 +438,13 @@ compareSets <- function(v, strings, split_delim) {
   return(matches)
 }
 
+# gene = string defining a combination rule ID
+# ruleIDs = vector of ruleIDs
+compare2sets <- function(gene, ruleIDs){
+  component_ruleIDs <- unlist(str_split(gene, " & "))
+  return(all(component_ruleIDs %in% ruleIDs))
+}
+
 getGenes <- function(data, combo) {
   marker_names <- unlist(str_split(combo, ", "))
   if (length(marker_names)>1) {
@@ -474,6 +481,7 @@ getSources <- function(amr_binary, combo, assay) {
 
   return(sources)
 }
+
 
 convert_mutation <- function(mut) {
   aa_mapping <- c(
