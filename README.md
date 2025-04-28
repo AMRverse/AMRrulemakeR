@@ -63,7 +63,7 @@ cip_analysis$upset_disk_plot
 cip_rules <- amrrules_save(cip_analysis, bp_site="Non-meningitis", dir_path="amrrules", file_prefix="Cipro")
 
 # test rules
-calls <- test_rules_amrfp(geno_table = ecoli_geno, rules = cip_rules$rules, species = "Escherichia coli")
+calls <- test_rules_amrfp(geno_table = ecoli_geno, rules = cip_rules$rules, species = "s_Escherichia coli")
 
 # compare these calls to the AST data phenotypes in a separate dataframe, `pheno_table` with SIR phenotypes in `pheno`
 calls_vs_pheno <- calls %>% left_join(ecoli_ast, join_by(Name==id))
