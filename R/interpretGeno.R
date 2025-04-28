@@ -1,10 +1,10 @@
-# interpret AMRfinderplus genotypes using a set of rules
+# interpret AMRfinderplus genotypes using a set of rules generated from quantitative data
 # output = phenotype call and category call per strain
 # note this function is designed  for internal validation/exploration of rule sets, 
 #   NOT annotating each line of a genotype report with an interpretation
 #   OR for generating a detailed AMR report
 
-interpret_amrfp <- function(geno_table, rules, species) {
+test_rules_amrfp <- function(geno_table, rules, species) {
   
   # convert mutations to AMRrules format, store concatenation as label
   # NOTE this will not work for manually defined rules which use a hierarchy node, it is just for checking rules defined from quantitative geno-pheno analysis of AMRfp data
