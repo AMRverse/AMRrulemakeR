@@ -16,7 +16,8 @@ amrrules_save(
   bp_site = NULL,
   ruleID_start = 1000,
   mic_S = NULL,
-  mic_R = NULL
+  mic_R = NULL,
+  makeRules = TRUE
 )
 }
 \arguments{

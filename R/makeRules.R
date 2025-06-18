@@ -50,7 +50,7 @@
 #'
 #' @import dplyr
 #' @import ggplot2
-#' @importFrom AMR as.ab as.mo
+#' @importFrom AMR as.ab as.mo intrinsic_resistant
 #'
 #' @export
 makerules <- function(amrrules, minObs=3, weak_threshold=20, core_threshold=0.9,
@@ -66,20 +66,20 @@ makerules <- function(amrrules, minObs=3, weak_threshold=20, core_threshold=0.9,
 
   species <- amrrules$species
 
-  print(paste("Generating AMRrules for", antibiotic, "in", species))
+  cat(paste("Generating AMRrules for", antibiotic, "in", species,"\n"))
 
   # check if this drug is an expected R or I in this species
   expected_R <- as.ab(antibiotic) %in% (intrinsic_resistant %>% filter(mo==as.mo(species)) %>% pull(ab))
-  if (expected_R) {print(paste(antibiotic,"is an expected resistance for",species))}
+  if (expected_R) {cat(paste(" ",antibiotic,"is an expected resistance for",species,"\n"))}
 
   expected_I <- FALSE
   if(!expected_R) { # if expected I, the MIC S breakpoint is set to 0.001 (i.e. there is effectively no S category as all isolates exceed this value)
-    bp_mic <-checkBreakpoints(species, guide, antibiotic, bp_site, "", assay="MIC")
+    capture.output({bp_mic <- checkBreakpoints(species, guide, antibiotic, bp_site, "", assay="MIC")})
     if (bp_mic$breakpoint_S==0.001) {expected_I <- TRUE}
-    bp_disk <-checkBreakpoints(species, guide, antibiotic, bp_site, "", assay="DISK")
+    capture.output({bp_disk <-checkBreakpoints(species, guide, antibiotic, bp_site, "", assay="DISK")})
     if (bp_disk$breakpoint_S==50) {expected_I <- TRUE}
   }
-  if (expected_I) {print(paste(antibiotic,"is an expected I for",species, "(there is no S category)"))}
+  if (expected_I) {cat(paste(" ",antibiotic,"is an expected I for",species, "(there is no S category)\n"))}
 
   check_ruleID_start <- as.integer(ruleID_start)
   if(is.na(check_ruleID_start)) {stop(paste("Need valid integer to start numbering rules, specified via 'ruleID_start':", ruleID_start,"is not valid"))}
@@ -94,9 +94,9 @@ makerules <- function(amrrules, minObs=3, weak_threshold=20, core_threshold=0.9,
     if (is_empty(rule_prefix)) {
       stop(paste("Could not determine valid rule ID prefix to use based on the species name:", species, "- please specify directly using 'rule_prefix'"))
     }
-    else{print(paste("Determined rule ID prefix:",rule_prefix))}
+    else{cat(paste("  Determined rule ID prefix:",rule_prefix,"\n"))}
   }
-  else{print(paste("Using user-specified rule ID prefix:",rule_prefix))}
+  else{cat(paste("  Using user-specified rule ID prefix:",rule_prefix,"\n"))}
 
   # prepare breakpoints
   bp_standard_mic <- "" # suffix to add to the breakpoint standard recorded in rules
@@ -118,7 +118,7 @@ makerules <- function(amrrules, minObs=3, weak_threshold=20, core_threshold=0.9,
       mic_R <- bp$breakpoint_R
       bp_standard_mic <- bp$bp_standard
     }
-    else{print(paste("Using user-specified MIC breakpoints: S <=", mic_S,"and R >", mic_R))}
+    else{cat(paste("  Using user-specified MIC breakpoints: S <=", mic_S,"and R >", mic_R,"\n"))}
 
     if (is.null(mic_ecoff)) { # determine MIC ECOFF
       ecoffs <- getBreakpoints(species, guide, antibiotic, "ECOFF") %>% filter(method=="MIC")
@@ -126,10 +126,10 @@ makerules <- function(amrrules, minObs=3, weak_threshold=20, core_threshold=0.9,
       else {
         mic_ecoff <- ecoffs %>% pull(breakpoint_S) %>% first()
         if (is.na(mic_ecoff)) {stop("Could not determine MIC ECOFF using AMR package, please provide your own value via 'mic_ecoff'")}
-        else{print(paste("MIC ECOFF determined using AMR package:", mic_ecoff))}
+        else{cat(paste("  MIC ECOFF determined using AMR package:", mic_ecoff,"\n"))}
       }
     }
-    else{print(paste("Using user-specified MIC ECOFF:", mic_ecoff))}
+    else{cat(paste("  Using user-specified MIC ECOFF:", mic_ecoff,"\n"))}
   }
 
   # retrieve disk breakpoints/ECOFF if needed
@@ -137,11 +137,11 @@ makerules <- function(amrrules, minObs=3, weak_threshold=20, core_threshold=0.9,
 
     # check we have disk data - don't stop but warn, and set use_disk to false if none available
     if (is.null(amrrules$upset_disk_summary)) {
-      print("'use_disk' set to TRUE but there are is no disk summary data ($upset_disk_summary) in the input object")
+      cat("  WARNING: 'use_disk' set to TRUE but there are is no disk summary data ($upset_disk_summary) in the input object\n")
       use_disk=F
     }
     else if (nrow(amrrules$upset_disk_summary %>% filter(marker_count>0))==0) {
-      print("'use_disk' set to TRUE but the disk summary data ($upset_disk_summary) in the input object is empty")
+      cat("  WARNING: 'use_disk' set to TRUE but the disk summary data ($upset_disk_summary) in the input object is empty\n")
       use_disk=F
     }
   }
@@ -153,7 +153,7 @@ makerules <- function(amrrules, minObs=3, weak_threshold=20, core_threshold=0.9,
       disk_R <- bp$breakpoint_R
       bp_standard_disk <- bp$bp_standard
     }
-    else{print(paste("Using user-specified disk breakpoints: S >=", disk_S,"and R <", disk_R))}
+    else{cat(paste("  Using user-specified disk breakpoints: S >=", disk_S,"and R <", disk_R,"\n"))}
 
     if (is.null(disk_ecoff)) { # determine disk ECOFF
       ecoffs <- getBreakpoints(species, guide, antibiotic, "ECOFF") %>% filter(method=="DISK")
@@ -161,10 +161,10 @@ makerules <- function(amrrules, minObs=3, weak_threshold=20, core_threshold=0.9,
       else {
         disk_ecoff <- ecoffs %>% pull(breakpoint_S) %>% first()
         if (is.na(disk_ecoff)) {stop("Could not determine disk ECOFF using AMR package, please provide your own value via 'disk_ecoff'")}
-        else{print(paste("Disk ECOFF determined using AMR package:", disk_ecoff))}
+        else{cat(paste("  Disk ECOFF determined using AMR package:", disk_ecoff,"\n"))}
       }
     }
-    else{print(paste("Using user-specified disk ECOFF:", disk_ecoff))}
+    else{cat(paste("  Using user-specified disk ECOFF:", disk_ecoff,"\n"))}
   }
 
   ## load quantitative data

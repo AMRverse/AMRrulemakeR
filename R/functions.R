@@ -141,15 +141,15 @@ amrrules_analysis <- function(geno_table, pheno_table, antibiotic, drug_class_li
   reference_disk <- safe_execute(rep(reference_disk$disk_diffusion, reference_disk$count))
   reference_disk_plot <- safe_execute(ggplot2::autoplot(reference_disk, ab = antibiotic, mo = species, title = "EUCAST reference disk zone distribtion"))
 
-  summary <- safe_execute(summarise_data(geno_table, pheno_table, antibiotic=antibiotic, drug_class_list=drug_class_list, geno_sample_col=geno_sample_col, pheno_sample_col=pheno_sample_col))
+  summary <- safe_execute(summarise_data(geno_table, pheno_table, antibiotic=antibiotic, drug_class_list=drug_class_list, geno_sample_col=geno_sample_col, pheno_sample_col=pheno_sample_col, species=species))
 
-  print("Running solo PPV analysis")
+  cat("Running solo PPV analysis\n")
   soloPPV <- safe_execute(AMRgen::solo_ppv_analysis(geno_table=geno_table, pheno_table=pheno_table, antibiotic=antibiotic, drug_class_list=drug_class_list, sir_col=sir_col, min=minPPV))
 
-  print("Running logistic regression")
+  cat("Running logistic regression\n")
   logistic <- safe_execute(AMRgen::amr_logistic(geno_table=geno_table, pheno_table=pheno_table, antibiotic=antibiotic, drug_class_list=drug_class_list, sir_col=sir_col, maf=mafLogReg, geno_sample_col=geno_sample_col, pheno_sample_col=pheno_sample_col, ecoff_col=NULL))
 
-  print("Summarising stats")
+  cat("Summarising stats\n")
   allstatsR <- safe_execute(AMRgen::merge_logreg_soloppv(logistic$modelR, soloPPV$solo_stats %>% filter(category=="R"),
                                                  title=paste0(paste0(drug_class_list, collapse="/")," markers vs ",antibiotic, " R")))
 
@@ -162,12 +162,12 @@ amrrules_analysis <- function(geno_table, pheno_table, antibiotic, drug_class_li
                                                                               marker_order=levels(as.factor(soloPPV$solo_stats$marker))) +
                                       theme(legend.position="none") + ggtitle("Logistic regression", subtitle="for R and NWT"))
 
-  print("Generating upset plots")
+  cat("Generating upset plots\n")
 
   upset_mic <- safe_execute(AMRgen::amr_upset(soloPPV$amr_binary %>% filter(!is.na(pheno)), min_set_size=mafUpset, order="value", assay="mic"))
 
   upset_disk <- safe_execute(AMRgen::amr_upset(soloPPV$amr_binary %>% filter(!is.na(pheno)), min_set_size=mafUpset, order="value", assay="disk"))
-
+  
   if (!is.null(upset_mic$summary) & !is.null(upset_disk$summary)) {
     combination_summary_values <- safe_execute(full_join(upset_mic$summary, upset_disk$summary, by=c("marker_list", "marker_count"), suffix=c(".mic", ".disk")))
   } else {
@@ -261,36 +261,58 @@ amrrules_analysis <- function(geno_table, pheno_table, antibiotic, drug_class_li
 #' }
 #'
 #' @export
-amrrules_save <- function(amrrules, width=9, height=9, dir_path, outdir_name=NULL, file_prefix=NULL, minObs=3, weak_threshold=20, bp_site=NULL, ruleID_start=1000, mic_S=NULL, mic_R=NULL) {
+amrrules_save <- function(amrrules, width=9, height=9, dir_path, outdir_name=NULL, file_prefix=NULL, minObs=3, weak_threshold=20, bp_site=NULL, ruleID_start=1000, mic_S=NULL, mic_R=NULL, makeRules=TRUE) {
 
   if (is.null(outdir_name)) { outdir_name <- amrrules$antibiotic }
   if (is.null(file_prefix)) { file_prefix <- amrrules$antibiotic }
 
-  dir.create(paste0(dir_path))
-  dir.create(paste0(dir_path,"/",outdir_name))
+  if (!dir.exists(dir_path)) {
+    dir.create(dir_path, recursive = TRUE)
+    cat(paste0("Directory '", dir_path, "' created successfully (recursively).\n"))
+  }
+  
+  outdir_path <- paste0(dir_path,"/",outdir_name)
+  if (!dir.exists(outdir_path)) {
+    dir.create(dir_path, recursive = TRUE)
+    cat(paste0("Directory '", outdir_path, "' created successfully (recursively).\n"))
+  }
 
-  outpath=paste0(dir_path,"/",outdir_name,"/",file_prefix)
+  outpath <- paste0(dir_path,"/",outdir_name,"/",file_prefix)
 
-  print(paste0("Writing figs and tables to ", outpath,"_*"))
+  cat(paste0("\nWriting figs and tables to ", outpath,"_*\n"))
 
-  safe_execute(ggsave(amrrules$reference_mic_plot, filename=paste0(outpath,"_reference_mic_plot.pdf"), width=width, height=height))
-  safe_execute(ggsave(amrrules$reference_disk_plot, filename=paste0(outpath,"_reference_disk_plot.pdf"), width=width, height=height))
-  safe_execute(ggsave(amrrules$ppv_plot, filename=paste0(outpath,"_soloPPV_plot.pdf"), width=width, height=height))
-  safe_execute(ggsave(amrrules$logistic_plot, filename=paste0(outpath,"_logistic_plot.pdf"), width=width, height=height))
-  safe_execute(ggsave(amrrules$ppv_logistic_plot, filename=paste0(outpath,"_soloPPV_logistic_plot.pdf"), width=width, height=height))
-  safe_execute(ggsave(amrrules$upset_mic_plot, filename=paste0(outpath,"_MIC_upset_plot.pdf"), width=width, height=height))
-  safe_execute(ggsave(amrrules$upset_disk_plot, filename=paste0(outpath,"_disk_upset_plot.pdf"), width=width, height=height))
+  if (!is.null(amrrules$reference_mic_plot)) {safe_execute(ggsave(amrrules$reference_mic_plot, filename=paste0(outpath,"_reference_mic_plot.pdf"), width=width, height=height))}
+  if (!is.null(amrrules$reference_disk_plot)) {safe_execute(ggsave(amrrules$reference_disk_plot, filename=paste0(outpath,"_reference_disk_plot.pdf"), width=width, height=height))}
+  if (!is.null(amrrules$ppv_plot)) {safe_execute(ggsave(amrrules$ppv_plot, filename=paste0(outpath,"_soloPPV_plot.pdf"), width=width, height=height))}
+  if (!is.null(amrrules$logistic_plot)) {safe_execute(ggsave(amrrules$logistic_plot, filename=paste0(outpath,"_logistic_plot.pdf"), width=width, height=height))}
+  if (!is.null(amrrules$ppv_logistic_plot)) {safe_execute(ggsave(amrrules$ppv_logistic_plot, filename=paste0(outpath,"_soloPPV_logistic_plot.pdf"), width=width, height=height))}
+  if (!is.null(amrrules$upset_mic_plot)) {safe_execute(ggsave(amrrules$upset_mic_plot, filename=paste0(outpath,"_MIC_upset_plot.pdf"), width=width, height=height))}
+  if (!is.null(amrrules$upset_disk_plot)) {safe_execute(ggsave(amrrules$upset_disk_plot, filename=paste0(outpath,"_disk_upset_plot.pdf"), width=width, height=height))}
 
-  safe_execute(write_tsv(as.data.frame(amrrules$summary), col_names=F, file=paste0(outpath,"_data_summary.tsv")))
-  safe_execute(write_tsv(amrrules$allstatsR, file=paste0(outpath,"_stats_R.tsv")))
-  safe_execute(write_tsv(amrrules$allstatsNWT, file=paste0(outpath,"_stats_NWT.tsv")))
-  safe_execute(write_tsv(amrrules$combination_summary_values, file=paste0(outpath,"_combination_MIC_DD_summary.tsv")))
+  safe_execute(readr::write_tsv(as.data.frame(amrrules$summary), col_names=F, file=paste0(outpath,"_data_summary.tsv")))
+  safe_execute(readr::write_tsv(amrrules$allstatsR, file=paste0(outpath,"_stats_R.tsv")))
+  safe_execute(readr::write_tsv(amrrules$allstatsNWT, file=paste0(outpath,"_stats_NWT.tsv")))
+  
+  if (!is.null(amrrules$upset_mic_summary)) {safe_execute(readr::write_tsv(amrrules$upset_mic_summary, file=paste0(outpath,"_MIC_summary.tsv")))}
+  else {cat ("  (No MIC data summary available to write)\n")}
+  if (!is.null(amrrules$upset_disk_summary)) {safe_execute(readr::write_tsv(amrrules$upset_disk_summary, file=paste0(outpath,"_DD_summary.tsv")))}
+  else {cat ("  (No disk diffusion data summary available to write)\n")}
 
-  # make rules
-  rules <- safe_execute(makerules(amrrules, minObs=minObs, weak_threshold=weak_threshold, bp_site=bp_site, ruleID_start=ruleID_start, mic_S=mic_S, mic_R=mic_R))
-  safe_execute(write_tsv(rules$rules, file=paste0(outpath,"_AMRrules.tsv")))
-  safe_execute(write_tsv(rules$data, file=paste0(outpath,"_AMRrules_data.tsv")))
+  # make rules and write them out to same directory
+  if (makeRules) {
+    cat ("\n")
+    rules <- safe_execute(makerules(amrrules, minObs=minObs, weak_threshold=weak_threshold, bp_site=bp_site, ruleID_start=ruleID_start, mic_S=mic_S, mic_R=mic_R))
+    if (!is.null(rules)) {
+      safe_execute(readr::write_tsv(rules$rules, file=paste0(outpath,"_AMRrules.tsv")))
+      safe_execute(readr::write_tsv(rules$data, file=paste0(outpath,"_AMRrules_data.tsv")))
+      cat(paste0("\nWriting rules to ",outpath,"_AMRrules.tsv\n"))
+      }
+    else{cat("Failed to make rules\n\n")}
+  }
+  else {rules <- NULL}
 
+  cat ("\n")
+  
   return(rules)
 }
 
@@ -395,8 +417,8 @@ checkBreakpoints <- function(species, guide="EUCAST 2024", antibiotic, assay="MI
     if (is.na(breakpoint_S) | is.na(breakpoint_R)) {stop(paste("Could not determine",assay,"breakpoints using AMR package, please provide your own breakpoints"))}
     if (assay=="MIC") { breakpoint_message <- paste("MIC breakpoints determined using AMR package: S <=", breakpoint_S,"and R >", breakpoint_R) }
     else { breakpoint_message <- paste("Disk diffusion breakpoints determined using AMR package: S >=", breakpoint_S,"and R <", breakpoint_R) }
-    print(breakpoint_message)
-    if(!is.na(breakpoint_message_multibp)) {print(breakpoint_message_multibp)}
+    cat(paste0("  ",breakpoint_message, "\n"))
+    if(!is.na(breakpoint_message_multibp)) {cat(paste0("  ",breakpoint_message_multibp, "\n"))}
   }
   return(list(breakpoint_S=breakpoint_S,breakpoint_R=breakpoint_R, bp_standard=bp_standard))
 }
