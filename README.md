@@ -9,7 +9,7 @@ An overview of the AMRrules concept, with example data structures and code, is a
 
 Development of the AMRrules scheme, and curation of organism-specific rule sets, is being undertaken by a working group of [ESGEM, the ESCMID Study Group on Epidemiological Markers](https://www.escmid.org/esgem/), known as the ESGEM-AMR Working Group. Details of this group and their activities can be found [here](https://github.com/AMRverse/AMRrulescuration), including draft rules in the AMRrules format ([specification v0.5](https://docs.google.com/spreadsheets/d/1F-J-_8Kyo3W0Oh6eDYyd0N8ahqVwiddM2112-Fg1gKc/edit?usp=sharing)).
 
-To support the work of defining AMRrules, we have developed the [AMRgen](https://github.com/interpretAMR/AMRgen) R package to facilitate comparison of AMR genotype and phenotype data and the defining and checking of rules based on quantitative analysis. 
+To support the work of defining AMRrules, we have developed the [AMRgen](https://github.com/AMRverse/AMRgen) R package to facilitate comparison of AMR genotype and phenotype data and the defining and checking of rules based on quantitative analysis. 
 
 __The `AMRrulemakeR` package draws on the `AMR` and `AMRgen` package functions to:__
 * summarise the available genotype-phenotype data for a given drug, and the available breakpoints with which to interpret phenotypes, using the `summarise_data` function
@@ -45,7 +45,7 @@ It is best to restart R before running the installation. If you didn't do this a
 ### Examples
 ```r
 
-library(AMRrules)
+library(AMRrulemakeR)
 library(tidyverse)
 
 # example data from AMRgen package: E. coli MIC data from NCBI, matching AMRfinderplus data

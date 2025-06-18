@@ -1,4 +1,4 @@
-Package: AMRrulesR
+Package: AMRrulemakeR
 Title: Define and Test AMRrules for Interpreting AMR Genotypes
 Version: 0.0.0.9000
 Authors@R: 
@@ -6,8 +6,8 @@ Authors@R:
 Description: AMRrules specify how the presence of an antimicrobial resistance (AMR) marker in the genome of a given bacterial species should be interpreted in terms of the expected phenotype. This package can be used to define and test AMRrules, using quantitative analysis of matched genotype and phenotype data.
 License: MIT + file LICENSE
 Encoding: UTF-8
-URL: https://github.com/interpretAMR/AMRrulesR
-BugReports: https://github.com/interpretAMR/AMRrulesR/issues
+URL: https://github.com/AMRverse/AMRrulemakeR
+BugReports: https://github.com/AMRverse/AMRrulemakeR/issues
 Imports: 
     AMR,
     AMRgen,
