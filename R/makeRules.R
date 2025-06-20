@@ -219,7 +219,7 @@ makerules <- function(amrrules, minObs=3, weak_threshold=20, core_threshold=0.9,
   else {data <- data %>% mutate(Disk.median=NA, Disk.n=NA, disk_note=NA)}
 
   # add rules for any markers detected, but not already accounted for (ie not found solo or with logistic regression data)
-  col <- colnames(amrrules$amr_binary) # get column names
+  col <- gsub("\\.\\.", ":", colnames(amrrules$amr_binary)) # get column names, fix .. to :
   cols_to_remove <- c("id", "mic", "disk", "R", "NWT", "pheno", "source")
   genes <- setdiff(col, cols_to_remove)
   genes_to_add <- setdiff(genes, data$marker)
@@ -365,18 +365,15 @@ makerules <- function(amrrules, minObs=3, weak_threshold=20, core_threshold=0.9,
   # gene info
   gene_info <- amrrules$afp_hits %>%
     rename(nodeID=`Hierarchy node`) %>%
-    mutate(`HMM accession` = if ("HMM id" %in% names(.)) .data[["HMM id"]] else rep(NA, n())) %>%
-    separate(marker, into = c("gene", "mutation"), sep = "_", remove=F, fill="right") %>%
-    mutate(gene=if_else(`Element subtype`=="POINT", gene, as.character(marker))) %>%
-    mutate(mutation=if_else(`Element subtype`=="POINT", mutation, NA)) %>%
-    mutate(`variation type` = if_else(is.na(mutation),
+    mutate(`variation type` = if_else(is.na(mutation), # TO DO: handle nucleotide variant etc
                                       "Gene presence detected",
                                       "Protein variant detected")) %>%
     mutate(context=if_else(`Element subtype`=="AMR" & freq>core_threshold,
                            "core", "accessory")) %>%
-    mutate(mutation=if_else(!is.na(mutation), convert_mutation(mutation), "-")) %>%
-    select(-c(`Gene symbol`,`Element subtype`)) %>%
-    mutate(marker=as.character(marker))
+    mutate(mutation=if_else(is.na(mutation), "-", mutation)) %>%
+    select(-c(marker, `Element subtype`, `HMM id`)) %>%
+    rename(marker=marker.label) %>% # to match HGVS formated labels in the input stats
+    mutate(marker=as.character(marker)) # ensure this is a string for matching
 
   # summarise sources of pheno data
   if ("source" %in% colnames(amrrules$solo_binary)) {
@@ -438,6 +435,7 @@ makerules <- function(amrrules, minObs=3, weak_threshold=20, core_threshold=0.9,
     mutate(`breakpoint standard`=case_when(!category_from_disk ~ paste0(guide, bp_standard_mic),
                                            category_from_disk ~ paste0(guide, bp_standard_disk),
                                            TRUE~"-")) %>%
+    mutate(`breakpoint condition`=paste0(bp_site, bp_standard_mic)) %>% #TO CHECK
     mutate(`rule curation note`=paste0(note_prefix, ". ", marker, ". ")) %>%
     mutate(`rule curation note`=if_else(!is.na(`clinical category`),
                                         paste0(`rule curation note`, "Category call '", `clinical category`, "' based on ", catnote, " "),
@@ -480,19 +478,21 @@ makerules <- function(amrrules, minObs=3, weak_threshold=20, core_threshold=0.9,
                                         TRUE ~ "")) %>%
     mutate(`evidence limitations`=paste0(`evidence limitations`, source_limitations)) %>%
     mutate(date_stamp=format(Sys.time(), "%Y-%m-%d %H:%M:%S")) %>%
-    select(ruleID, organism, gene, nodeID, `HMM accession`, mutation, `variation type`,
-           context, drug, phenotype, `clinical category`, breakpoint, `breakpoint standard`,
+    select(ruleID, organism, gene, nodeID, mutation, `variation type`,
+           context, drug, phenotype, `clinical category`, 
+           breakpoint, `breakpoint standard`, `breakpoint condition`,
            `evidence code`, `evidence grade`, `evidence limitations`,
            `rule curation note`, date_stamp,
            # quantitative data columns, not part of rule spec:
-           any_of(c("R.ppv", "R.ppv.n", "R.ppv.x", "NWT.ppv", "NWT.ppv.n", "NWT.ppv.x", "solo.sources", "solo.sources.SIR,
+           any_of(c("marker","R.ppv", "R.ppv.n", "R.ppv.x", "NWT.ppv", "NWT.ppv.n", "NWT.ppv.x", "solo.sources", "solo.sources.SIR,
            MIC.median", "MIC.n", "MIC.q25", "MIC.q75", "mic.sources", "mic.sources.SIR,
            Disk.median", "Disk.n", "Disk.q25", "Disk.q75", "disk.sources", "disk.sources.SIR,
            LogRegR.est", "LogRegR.ci.lower", "LogRegR.ci.upper", "LogRegR.pval,
            LogRegNWT.est", "LogRegNWT.ci.lower", "LogRegNWT.ci.upper", "LogRegNWT.pval", "freq"))) %>%
     mutate(`refseq accession`="-",
-           `GenBank accession`="-", .after=nodeID) %>%
-    mutate(`ARO accession`="-", .after=`HMM accession`) %>%
+           `GenBank accession`="-", 
+           `HMM accession`="-", 
+           `ARO accession`="-", .after=nodeID) %>%
     mutate(`drug class`="-", .after=drug) %>%
     mutate(across(everything(), ~ ifelse(is.na(.), "-", .)))
 

@@ -13,6 +13,7 @@ amrrules_analysis(
   sir_col = "pheno",
   geno_sample_col = "Name",
   pheno_sample_col = "id",
+  marker_col = "marker.label",
   minPPV = 1,
   mafLogReg = 5,
   mafUpset = 5
@@ -34,6 +35,8 @@ amrrules_analysis(
 \item{geno_sample_col}{The column in \code{geno_table} with sample IDs (default: \code{"Name"}).}
 
 \item{pheno_sample_col}{The column in \code{pheno_table} with sample IDs (default: \code{"id"}).}
+
+\item{marker_col}{A character string specifying the column name in \code{geno_table} containing the marker identifiers. Defaults to \code{"marker.label"}.}
 
 \item{minPPV}{Minimum number of samples required for a marker to be included in PPV analysis (default: 1).}
 

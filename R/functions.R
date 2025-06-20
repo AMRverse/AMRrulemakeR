@@ -88,6 +88,7 @@ summarise_data <- function(geno_table, pheno_table, antibiotic, drug_class_list,
 #' @param sir_col The name of the phenotypic classification column to use (default: `"pheno"`).
 #' @param geno_sample_col The column in \code{geno_table} with sample IDs (default: `"Name"`).
 #' @param pheno_sample_col The column in \code{pheno_table} with sample IDs (default: `"id"`).
+#' @param marker_col A character string specifying the column name in `geno_table` containing the marker identifiers. Defaults to `"marker.label"`.
 #' @param minPPV Minimum number of samples required for a marker to be included in PPV analysis (default: 1).
 #' @param mafLogReg Minor allele frequency threshold for logistic regression inclusion (default: 5).
 #' @param mafUpset Minor allele frequency threshold for upset plot inclusion (default: 5).
@@ -130,7 +131,8 @@ summarise_data <- function(geno_table, pheno_table, antibiotic, drug_class_list,
 #'
 #' @export
 amrrules_analysis <- function(geno_table, pheno_table, antibiotic, drug_class_list, species, sir_col="pheno",
-                              geno_sample_col="Name", pheno_sample_col="id", minPPV=1, mafLogReg=5, mafUpset=5) {
+                              geno_sample_col="Name", pheno_sample_col="id", marker_col="marker.label",
+                              minPPV=1, mafLogReg=5, mafUpset=5) {
 
   # plot EUCAST reference distributions
   reference_mic <- safe_execute(AMRgen::get_eucast_mic_distribution(antibiotic, species))
@@ -144,10 +146,10 @@ amrrules_analysis <- function(geno_table, pheno_table, antibiotic, drug_class_li
   summary <- safe_execute(summarise_data(geno_table, pheno_table, antibiotic=antibiotic, drug_class_list=drug_class_list, geno_sample_col=geno_sample_col, pheno_sample_col=pheno_sample_col, species=species))
 
   cat("Running solo PPV analysis\n")
-  soloPPV <- safe_execute(AMRgen::solo_ppv_analysis(geno_table=geno_table, pheno_table=pheno_table, antibiotic=antibiotic, drug_class_list=drug_class_list, sir_col=sir_col, min=minPPV))
+  soloPPV <- safe_execute(AMRgen::solo_ppv_analysis(geno_table=geno_table, pheno_table=pheno_table, antibiotic=antibiotic, drug_class_list=drug_class_list, sir_col=sir_col, min=minPPV, marker_col=marker_col))
 
   cat("Running logistic regression\n")
-  logistic <- safe_execute(AMRgen::amr_logistic(geno_table=geno_table, pheno_table=pheno_table, antibiotic=antibiotic, drug_class_list=drug_class_list, sir_col=sir_col, maf=mafLogReg, geno_sample_col=geno_sample_col, pheno_sample_col=pheno_sample_col, ecoff_col=NULL))
+  logistic <- safe_execute(AMRgen::amr_logistic(geno_table=geno_table, pheno_table=pheno_table, antibiotic=antibiotic, drug_class_list=drug_class_list, sir_col=sir_col, maf=mafLogReg, geno_sample_col=geno_sample_col, pheno_sample_col=pheno_sample_col, marker_col=marker_col, ecoff_col=NULL))
 
   cat("Summarising stats\n")
   allstatsR <- safe_execute(AMRgen::merge_logreg_soloppv(logistic$modelR, soloPPV$solo_stats %>% filter(category=="R"),
@@ -182,15 +184,15 @@ amrrules_analysis <- function(geno_table, pheno_table, antibiotic, drug_class_li
 
   afp_hits <- overlap$geno_matched %>%
     filter(`Element type`=="AMR") %>%
-    select(any_of(c("marker", "Gene symbol", "Element subtype", "Hierarchy node", "HMM id"))) %>%
+    select(any_of(c("marker", "gene", "mutation", "marker.label", "Gene symbol", "Element subtype", "Hierarchy node", "HMM id"))) %>%
     distinct()
 
   # add gene frequencies to help define core/accessory
   afp_hits <- overlap$geno_matched %>%
-    group_by(marker) %>%
+    group_by(!!sym(marker_col)) %>%
     count() %>%
     mutate(freq=n/length(unique(overlap$geno_matched$id))) %>%
-    select(-n) %>% right_join(afp_hits, by="marker")
+    select(-n) %>% right_join(afp_hits, by=marker_col)
 
   # merge geno/pheno and count unique sources per gene + pheno/mic/disk
   soloPPV$amr_binary <- pheno_table %>% select(any_of(c("id", "source", "pheno", "mic", "disk"))) %>%
@@ -473,7 +475,8 @@ getGenes <- function(data, combo) {
 
 getSources <- function(amr_binary, combo, assay) {
 
-  marker_names <- unlist(str_split(combo, ", "))
+  # assume combo list is in proper syntax (with ':') but amr_binary has colnames with '..' in place of ':'
+  marker_names <- unlist(str_split(gsub(":", "..", combo), ", "))
 
   total_sources <- amr_binary %>%
     filter(!is.na(get(assay))) %>%
