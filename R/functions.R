@@ -266,18 +266,13 @@ amrrules_save <- function(amrrules, width=9, height=9, dir_path, outdir_name=NUL
   if (is.null(outdir_name)) { outdir_name <- amrrules$antibiotic }
   if (is.null(file_prefix)) { file_prefix <- amrrules$antibiotic }
 
-  if (!dir.exists(dir_path)) {
-    dir.create(dir_path, recursive = TRUE)
-    cat(paste0("Directory '", dir_path, "' created successfully (recursively).\n"))
-  }
-  
-  outdir_path <- paste0(dir_path,"/",outdir_name)
+  outdir_path <- file.path(dir_path, outdir_name)
   if (!dir.exists(outdir_path)) {
-    dir.create(dir_path, recursive = TRUE)
-    cat(paste0("Directory '", outdir_path, "' created successfully (recursively).\n"))
+    safe_execute(dir.create(outdir_path, recursive=TRUE))
+    cat(paste0("Directory '", outdir_path, "' created successfully.\n"))
   }
 
-  outpath <- paste0(dir_path,"/",outdir_name,"/",file_prefix)
+  outpath <- file.path(outdir_path, file_prefix)
 
   cat(paste0("\nWriting figs and tables to ", outpath,"_*\n"))
 
