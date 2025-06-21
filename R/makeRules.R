@@ -68,19 +68,6 @@ makerules <- function(amrrules, minObs=3, weak_threshold=20, core_threshold=0.9,
 
   cat(paste("Generating AMRrules for", antibiotic, "in", species,"\n"))
 
-  # check if this drug is an expected R or I in this species
-  expected_R <- as.ab(antibiotic) %in% (intrinsic_resistant %>% filter(mo==as.mo(species)) %>% pull(ab))
-  if (expected_R) {cat(paste(" ",antibiotic,"is an expected resistance for",species,"\n"))}
-
-  expected_I <- FALSE
-  if(!expected_R) { # if expected I, the MIC S breakpoint is set to 0.001 (i.e. there is effectively no S category as all isolates exceed this value)
-    capture.output({bp_mic <- checkBreakpoints(species, guide, antibiotic, bp_site, "", assay="MIC")})
-    if (bp_mic$breakpoint_S==0.001) {expected_I <- TRUE}
-    capture.output({bp_disk <-checkBreakpoints(species, guide, antibiotic, bp_site, "", assay="DISK")})
-    if (bp_disk$breakpoint_S==50) {expected_I <- TRUE}
-  }
-  if (expected_I) {cat(paste(" ",antibiotic,"is an expected I for",species, "(there is no S category)\n"))}
-
   check_ruleID_start <- as.integer(ruleID_start)
   if(is.na(check_ruleID_start)) {stop(paste("Need valid integer to start numbering rules, specified via 'ruleID_start':", ruleID_start,"is not valid"))}
 
@@ -122,10 +109,16 @@ makerules <- function(amrrules, minObs=3, weak_threshold=20, core_threshold=0.9,
 
     if (is.null(mic_ecoff)) { # determine MIC ECOFF
       ecoffs <- getBreakpoints(species, guide, antibiotic, "ECOFF") %>% filter(method=="MIC")
-      if (nrow(ecoffs)==0) {stop("Could not determine MIC ECOFF using AMR package, please provide your own value via 'mic_ecoff'")}
+      if (nrow(ecoffs)==0) {
+        cat("  Could not determine MIC ECOFF using AMR package, using S breakpoint, consider providing your own value via 'mic_ecoff'\n")
+        mic_ecoff <- mic_S
+      }
       else {
         mic_ecoff <- ecoffs %>% pull(breakpoint_S) %>% first()
-        if (is.na(mic_ecoff)) {stop("Could not determine MIC ECOFF using AMR package, please provide your own value via 'mic_ecoff'")}
+        if (is.na(mic_ecoff)) {
+          cat("  Could not determine MIC ECOFF using AMR package, using S breakpoint, consider providing your own value via 'mic_ecoff'\n")
+          mic_ecoff <- mic_S
+        }
         else{cat(paste("  MIC ECOFF determined using AMR package:", mic_ecoff,"\n"))}
       }
     }
@@ -157,15 +150,33 @@ makerules <- function(amrrules, minObs=3, weak_threshold=20, core_threshold=0.9,
 
     if (is.null(disk_ecoff)) { # determine disk ECOFF
       ecoffs <- getBreakpoints(species, guide, antibiotic, "ECOFF") %>% filter(method=="DISK")
-      if (nrow(ecoffs)==0) {stop("Could not determine disk ECOFF using AMR package, please provide your own value via 'disk_ecoff'")}
+      if (nrow(ecoffs)==0) {
+        cat("  Could not determine disk ECOFF using AMR package, using S breakpoint, consider providing your own value via 'disk_ecoff'\n")
+        disk_ecoff <- disk_S
+      }
       else {
         disk_ecoff <- ecoffs %>% pull(breakpoint_S) %>% first()
-        if (is.na(disk_ecoff)) {stop("Could not determine disk ECOFF using AMR package, please provide your own value via 'disk_ecoff'")}
+        if (is.na(disk_ecoff)) {
+          cat("  Could not determine disk ECOFF using AMR package, using S breakpoint, consider providing your own value via 'disk_ecoff'\n")
+          disk_ecoff <- disk_S
+        }
         else{cat(paste("  Disk ECOFF determined using AMR package:", disk_ecoff,"\n"))}
       }
     }
     else{cat(paste("  Using user-specified disk ECOFF:", disk_ecoff,"\n"))}
   }
+  
+  # check if this drug is an expected R or I in this species
+  expected_R <- as.ab(antibiotic) %in% (intrinsic_resistant %>% filter(mo==as.mo(species)) %>% pull(ab))
+  if (expected_R) {cat(paste(" ",antibiotic,"is an expected resistance for",species,"\n"))}
+  
+  expected_I <- FALSE
+  if(!expected_R) { # if expected I, the MIC S breakpoint is set to 0.001 (i.e. there is effectively no S category as all isolates exceed this value)
+    if (!is.null(mic_S)) {if (mic_S==0.001) {expected_I <- TRUE}}
+    if (!is.null(disk_S)) {if (disk_S==50) {expected_I <- TRUE}}
+  }
+  if (expected_I) {cat(paste(" ",antibiotic,"is an expected I for",species, "(there is no S category)\n"))}
+  
 
   ## load quantitative data
 
