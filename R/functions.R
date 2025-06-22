@@ -263,7 +263,10 @@ amrrules_analysis <- function(geno_table, pheno_table, antibiotic, drug_class_li
 #' }
 #'
 #' @export
-amrrules_save <- function(amrrules, width=9, height=9, dir_path, outdir_name=NULL, file_prefix=NULL, minObs=3, weak_threshold=20, bp_site=NULL, ruleID_start=1000, mic_S=NULL, mic_R=NULL, makeRules=TRUE) {
+amrrules_save <- function(amrrules, width=9, height=9, dir_path, outdir_name=NULL, file_prefix=NULL, 
+                          minObs=3, weak_threshold=20, bp_site=NULL, ruleID_start=1000, 
+                          mic_S=NULL, mic_R=NULL, disk_S=NULL, disk_R=NULL, 
+                          use_disk=TRUE, makeRules=TRUE) {
 
   if (is.null(outdir_name)) { outdir_name <- amrrules$antibiotic }
   if (is.null(file_prefix)) { file_prefix <- amrrules$antibiotic }
@@ -298,7 +301,9 @@ amrrules_save <- function(amrrules, width=9, height=9, dir_path, outdir_name=NUL
   # make rules and write them out to same directory
   if (makeRules) {
     cat ("\n")
-    rules <- safe_execute(makerules(amrrules, minObs=minObs, weak_threshold=weak_threshold, bp_site=bp_site, ruleID_start=ruleID_start, mic_S=mic_S, mic_R=mic_R))
+    rules <- safe_execute(makerules(amrrules, minObs=minObs, weak_threshold=weak_threshold, bp_site=bp_site, 
+                                    ruleID_start=ruleID_start, mic_S=mic_S, mic_R=mic_R,
+                                    disk_S=disk_S, disk_R=disk_R, use_disk=use_disk))
     if (!is.null(rules)) {
       safe_execute(readr::write_tsv(rules$rules, file=paste0(outpath,"_AMRrules.tsv")))
       safe_execute(readr::write_tsv(rules$data, file=paste0(outpath,"_AMRrules_data.tsv")))
