@@ -412,7 +412,7 @@ makerules <- function(amrrules, minObs=3, weak_threshold=20, core_threshold=0.9,
     }
 
     source_names <- c("sources", "sources.S", "sources.I", "sources.R")
-    data <- add_missing_cols(data, c(paste0("solo.",source_names))) %>%
+    data <- add_missing_cols(data, c(paste0("solo.",source_names), paste0("disk.",source_names), paste0("mic.",source_names))) %>%
       mutate(solo.sources.SIR = if_else(!is.na(solo.sources),
                                         paste0(na0(solo.sources.S), " S, ", na0(solo.sources.I), " I, ", na0(solo.sources.R), " R"),
                                         "-")) %>%
