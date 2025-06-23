@@ -506,17 +506,3 @@ getSources <- function(amr_binary, combo, assay) {
 
   return(sources)
 }
-
-
-convert_mutation <- function(mut) {
-  aa_mapping <- c(
-    A = "Ala", R = "Arg", N = "Asn", D = "Asp", C = "Cys", E = "Glu",
-    Q = "Gln", G = "Gly", H = "His", I = "Ile", L = "Leu", K = "Lys",
-    M = "Met", F = "Phe", P = "Pro", S = "Ser", T = "Thr", W = "Trp",
-    Y = "Tyr", V = "Val"
-  )
-  aa1 <- substr(mut, 1, 1)
-  position <- substr(mut, 2, nchar(mut) - 1)
-  aa2 <- substr(mut, nchar(mut), nchar(mut))
-  return(paste0("p.", aa_mapping[aa1], position, aa_mapping[aa2]))
-}
