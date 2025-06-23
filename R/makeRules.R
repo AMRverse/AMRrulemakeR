@@ -380,9 +380,6 @@ makerules <- function(amrrules, minObs=3, weak_threshold=20, core_threshold=0.9,
   # gene info
   gene_info <- amrrules$afp_hits %>%
     rename(nodeID=`Hierarchy node`) %>%
-    mutate(`variation type` = if_else(is.na(mutation), # TO DO: handle nucleotide variant etc
-                                      "Gene presence detected",
-                                      "Protein variant detected")) %>%
     mutate(context=if_else(`Element subtype`=="AMR" & freq>core_threshold,
                            "core", "accessory")) %>%
     mutate(mutation=if_else(is.na(mutation), "-", mutation)) %>%

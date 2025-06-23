@@ -184,7 +184,7 @@ amrrules_analysis <- function(geno_table, pheno_table, antibiotic, drug_class_li
 
   afp_hits <- overlap$geno_matched %>%
     filter(`Element type`=="AMR") %>%
-    select(any_of(c("marker", "gene", "mutation", "marker.label", "Gene symbol", "Element subtype", "Hierarchy node", "HMM id"))) %>%
+    select(any_of(c("marker", "gene", "mutation", "node", "variation type", "marker.label", "Gene symbol", "Element subtype", "Hierarchy node", "HMM id"))) %>%
     distinct()
 
   # add gene frequencies to help define core/accessory
