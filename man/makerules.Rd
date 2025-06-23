@@ -17,7 +17,7 @@ makerules(
   disk_S = NULL,
   disk_R = NULL,
   disk_ecoff = NULL,
-  guide = "EUCAST 2024",
+  guide = "EUCAST 2025",
   bp_site = NULL,
   rule_prefix = NULL,
   ruleID_start = 1000,

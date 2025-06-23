@@ -17,7 +17,11 @@ amrrules_save(
   ruleID_start = 1000,
   mic_S = NULL,
   mic_R = NULL,
-  makeRules = TRUE
+  disk_S = NULL,
+  disk_R = NULL,
+  use_disk = TRUE,
+  makeRules = TRUE,
+  guide = "EUCAST 2025"
 )
 }
 \arguments{

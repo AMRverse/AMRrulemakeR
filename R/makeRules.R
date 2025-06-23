@@ -56,7 +56,7 @@
 makerules <- function(amrrules, minObs=3, weak_threshold=20, core_threshold=0.9,
                       use_mic=TRUE, mic_S=NULL, mic_R=NULL, mic_ecoff=NULL,
                       use_disk=TRUE, disk_S=NULL, disk_R=NULL, disk_ecoff=NULL,
-                      guide="EUCAST 2024", bp_site=NULL, rule_prefix=NULL, ruleID_start=1000,
+                      guide="EUCAST 2025", bp_site=NULL, rule_prefix=NULL, ruleID_start=1000,
                       note_prefix="Quantitative geno-pheno analysis by ESGEM-AMR WG",
                       regression=TRUE) {
 
@@ -358,9 +358,13 @@ makerules <- function(amrrules, minObs=3, weak_threshold=20, core_threshold=0.9,
 
     # remove the rule if not needed
     combo_rule <- data %>% filter(marker==combo)
-    if ((combo_rule$`clinical category` <= highest_individual_call) & (combo_rule$phenotype=="wildtype" | combo_rule$phenotype==highest_pheno_call)) {
-      data <- data %>% filter(marker!=combo)
-    }
+    if (is.na(combo_rule$`clinical category`) & is.na(combo_rule$phenotype)) { # no call to make, remove
+      data <- data %>% filter(marker!=combo)}
+    else {
+      if (!is.na(highest_individual_call) & !is.na(highest_pheno_call))  { # subrules to compare to
+        if ((combo_rule$`clinical category` <= highest_individual_call) & (combo_rule$phenotype=="wildtype" | combo_rule$phenotype==highest_pheno_call)) {
+          data <- data %>% filter(marker!=combo) # interpretation no different to subrules
+    }}}
 
   }
 
@@ -495,11 +499,11 @@ makerules <- function(amrrules, minObs=3, weak_threshold=20, core_threshold=0.9,
            `evidence code`, `evidence grade`, `evidence limitations`,
            `rule curation note`, date_stamp,
            # quantitative data columns, not part of rule spec:
-           any_of(c("marker","R.ppv", "R.ppv.n", "R.ppv.x", "NWT.ppv", "NWT.ppv.n", "NWT.ppv.x", "solo.sources", "solo.sources.SIR,
-           MIC.median", "MIC.n", "MIC.q25", "MIC.q75", "mic.sources", "mic.sources.SIR,
-           Disk.median", "Disk.n", "Disk.q25", "Disk.q75", "disk.sources", "disk.sources.SIR,
-           LogRegR.est", "LogRegR.ci.lower", "LogRegR.ci.upper", "LogRegR.pval,
-           LogRegNWT.est", "LogRegNWT.ci.lower", "LogRegNWT.ci.upper", "LogRegNWT.pval", "freq"))) %>%
+           any_of(c("marker","R.ppv", "R.ppv.n", "R.ppv.x", "NWT.ppv", "NWT.ppv.n", "NWT.ppv.x", "solo.sources", "solo.sources.SIR",
+           "MIC.n", "MIC.median", "MIC.q25", "MIC.q75", "mic.sources", "mic.sources.SIR",
+           "Disk.n", "Disk.median", "Disk.q25", "Disk.q75", "disk.sources", "disk.sources.SIR",
+           "LogRegR.est", "LogRegR.ci.lower", "LogRegR.ci.upper", "LogRegR.pval",
+           "LogRegNWT.est", "LogRegNWT.ci.lower", "LogRegNWT.ci.upper", "LogRegNWT.pval", "freq"))) %>%
     mutate(`refseq accession`="-",
            `GenBank accession`="-", 
            `HMM accession`="-", 
