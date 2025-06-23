@@ -11,7 +11,7 @@
 #' @param geno_sample_col The name of the column in \code{geno_table} that contains sample IDs (default: "Name").
 #' @param pheno_sample_col The name of the column in \code{pheno_table} that contains sample IDs (default: "id").
 #' @param species The species for which EUCAST breakpoints should be retrieved (default: "E. coli"), will be parsed using AMR::as.mo().
-#' @param guide The guidelines to retrieve breakpoints from using the AMR package (default: "EUCAST 2024").
+#' @param guide The guidelines to retrieve breakpoints from using the AMR package (default: "EUCAST 2025").
 #'
 #' @return A tibble summarizing the number of samples with genotype and phenotype data, and listing EUCAST breakpoints and ECOFFs.
 #'
@@ -26,7 +26,7 @@
 #'
 #' @export
 summarise_data <- function(geno_table, pheno_table, antibiotic, drug_class_list,
-                           geno_sample_col="Name", pheno_sample_col="id", species, guide="EUCAST 2024") {
+                           geno_sample_col="Name", pheno_sample_col="id", species, guide="EUCAST 2025") {
   geno_rows <- geno_table %>% filter(drug_class %in% drug_class_list)
   geno_samples <- geno_rows %>% pull(get(geno_sample_col)) %>% unique()
 

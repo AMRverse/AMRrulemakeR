@@ -18,7 +18,7 @@
 #' @param disk_S The disk diffusion S breakpoint. If `NULL`, breakpoints will be retrieved using the AMR package.
 #' @param disk_R The disk diffusion R breakpoint. If `NULL`, breakpoints will be retrieved using the AMR package.
 #' @param disk_ecoff The disk diffusion ECOFF for the antibiotic, used to define nonwildtype. If `NULL`, ECOFF will be retrieved using the AMR package.
-#' @param guide The guideline to use for breakpoints, when retrieving these from the AMR package. Default is `"EUCAST 2024"`.
+#' @param guide The guideline to use for breakpoints, when retrieving these from the AMR package. Default is `"EUCAST 2025"`.
 #' @param bp_site Site of infection, used if multiple breakpoint values are available for different body sites.
 #' @param rule_prefix Prefix for the generated rule IDs. If `NULL`, prefix will be assigned based on the species name.
 #' @param ruleID_start The starting ID number for generated rules. Default is 1000.

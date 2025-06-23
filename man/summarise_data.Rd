@@ -12,7 +12,7 @@ summarise_data(
   geno_sample_col = "Name",
   pheno_sample_col = "id",
   species,
-  guide = "EUCAST 2024"
+  guide = "EUCAST 2025"
 )
 }
 \arguments{
@@ -30,7 +30,7 @@ summarise_data(
 
 \item{species}{The species for which EUCAST breakpoints should be retrieved (default: "E. coli"), will be parsed using AMR::as.mo().}
 
-\item{guide}{The guidelines to retrieve breakpoints from using the AMR package (default: "EUCAST 2024").}
+\item{guide}{The guidelines to retrieve breakpoints from using the AMR package (default: "EUCAST 2025").}
 }
 \value{
 A tibble summarizing the number of samples with genotype and phenotype data, and listing EUCAST breakpoints and ECOFFs.

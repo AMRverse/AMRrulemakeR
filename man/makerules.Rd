@@ -50,7 +50,7 @@ makerules(
 
 \item{disk_ecoff}{The disk diffusion ECOFF for the antibiotic, used to define nonwildtype. If \code{NULL}, ECOFF will be retrieved using the AMR package.}
 
-\item{guide}{The guideline to use for breakpoints, when retrieving these from the AMR package. Default is \code{"EUCAST 2024"}.}
+\item{guide}{The guideline to use for breakpoints, when retrieving these from the AMR package. Default is \code{"EUCAST 2025"}.}
 
 \item{bp_site}{Site of infection, used if multiple breakpoint values are available for different body sites.}
 
