@@ -238,7 +238,7 @@ amrrules_analysis <- function(geno_table, pheno_table, antibiotic, drug_class_li
 #' @param outdir_name The name of the subdirectory within \code{dir_path} to save the results in (default: the antibiotic name).
 #' @param file_prefix The prefix for filenames of output files (default: the antibiotic name).
 #' @param minObs The minimum number of observations required to include a rule (default: 3).
-#' @param weak_threshold The threshold for identifying weak rules (default: 20).
+#' @param low_threshold The threshold below which rules are assigned to evidence grade 'low' (default: 20).
 #' @param bp_site The breakpoint site to filter on (Optional, use the \code{\link{summarise_data}} function to check whether there are different breakpoints for different sites and choose which one to specify here. By default, if multiple breakpoints are available the most conservative will be used.).
 #' @param ruleID_start The starting numeric ID with which to number rules (integer, default: 1000).
 #' @param mic_S The MIC breakpoint to define S (Optional, by default breakpoints are extracted from EUCAST using the AMR package, however if none are available or user wants to use a different one e.g. an ECOFF then it can be specified here).
@@ -264,7 +264,7 @@ amrrules_analysis <- function(geno_table, pheno_table, antibiotic, drug_class_li
 #'
 #' @export
 amrrules_save <- function(amrrules, width=9, height=9, dir_path, outdir_name=NULL, file_prefix=NULL, 
-                          minObs=3, weak_threshold=20, bp_site=NULL, ruleID_start=1000, 
+                          minObs=3, low_threshold=20, bp_site=NULL, ruleID_start=1000, 
                           mic_S=NULL, mic_R=NULL, disk_S=NULL, disk_R=NULL, 
                           use_disk=TRUE, makeRules=TRUE, guide="EUCAST 2025") {
 
@@ -301,7 +301,7 @@ amrrules_save <- function(amrrules, width=9, height=9, dir_path, outdir_name=NUL
   # make rules and write them out to same directory
   if (makeRules) {
     cat ("\n")
-    rules <- safe_execute(makerules(amrrules, minObs=minObs, weak_threshold=weak_threshold, bp_site=bp_site, 
+    rules <- safe_execute(makerules(amrrules, minObs=minObs, low_threshold=low_threshold, bp_site=bp_site, 
                                     ruleID_start=ruleID_start, mic_S=mic_S, mic_R=mic_R,
                                     disk_S=disk_S, disk_R=disk_R, use_disk=use_disk, guide=guide))
     if (!is.null(rules)) {
