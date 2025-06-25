@@ -431,8 +431,8 @@ makerules <- function(amrrules, minObs=3, low_threshold=20, core_threshold=0.9,
   # clean up fields as per AMRrules spec v0.5
   rules <- data %>% left_join(gene_info, by="marker") %>%
     mutate(gene=if_else(marker_count>1, gene.x, gene.y)) %>% # pull gene from ruleID combination for combo rules, otherwise gene name from gene_info
-    mutate(organism = paste0("s_",mo_fullname(as.mo(species)))) %>%
-    mutate(drug=ab_name(as.ab(antibiotic))) %>%
+    mutate(organism = paste0("s_",AMR::mo_fullname(as.mo(species)))) %>%
+    mutate(drug=AMR::ab_name(as.ab(antibiotic))) %>%
     mutate(category_from_disk = if_else(grepl("Disk. MIC disagrees.", catnote), TRUE, FALSE)) %>%
     mutate(breakpoint=case_when(!category_from_disk & `clinical category`=="S" ~ paste("MIC <=", mic_S, "mg/L"),
                                 !category_from_disk & `clinical category`=="R" ~ paste("MIC >", mic_R, "mg/L"),
