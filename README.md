@@ -62,12 +62,10 @@ cip_analysis$upset_disk_plot
 # save tables and plots and generate rules
 cip_rules <- amrrules_save(cip_analysis, bp_site="Non-meningitis", dir_path="amrrules", file_prefix="Cipro", use_disk=F, guide="CLSI 2025")
 
-# alternatively, call makerules directly
+# alternatively, call makerules directly on the analysis object
+cip_rules <- makerules(cip_analysis, bp_site="Non-meningitis", use_disk=F, guide="CLSI 2025")
 
-# test rules
-calls <- test_rules_amrfp(geno_table = ecoli_geno, rules = cip_rules$rules, species = "s_Escherichia coli")
+# view the proposed rules, in AMRrules specification format, with quantitative fields added
+view(cip_rules$rules)
 
-# compare these calls to the AST data phenotypes in a separate dataframe, `pheno_table` with SIR phenotypes in `pheno`
-calls_vs_pheno <- calls %>% left_join(ecoli_ast, join_by(Name==id))
-calls_vs_pheno %>% group_by(pheno, category) %>% count() %>% filter(pheno %in% c("S", "I", "R"))
 ```
