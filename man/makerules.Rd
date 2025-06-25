@@ -7,7 +7,7 @@
 makerules(
   amrrules,
   minObs = 3,
-  weak_threshold = 20,
+  low_threshold = 20,
   core_threshold = 0.9,
   use_mic = TRUE,
   mic_S = NULL,
@@ -30,7 +30,7 @@ makerules(
 
 \item{minObs}{Minimum number of observations (samples) required for a given marker/combination, in order for PPV or assay data to be considered in rule setting. Default is 3.}
 
-\item{weak_threshold}{Minimum number of observations required for \verb{evidence grade} to be assigned as "moderate" rather than "weak". Default is 20.}
+\item{low_threshold}{Minimum number of observations required for \verb{evidence grade} to be assigned as "moderate" rather than "low". Default is 20.}
 
 \item{core_threshold}{The threshold used to classify a gene as "core" based on its frequency in the sample set. Default is 0.9 (90\%).}
 
@@ -89,7 +89,7 @@ Full data on each marker/combination is also returned in the separate \code{data
 # Example of creating AMR rules
 amrrules <- amrrules_analysis(geno_table, pheno_table, antibiotic = "Ciprofloxacin",
                               drug_class_list = c("Quinolones"), species = "E. coli")
-rules <- makerules(amrrules, minObs = 5, weak_threshold = 25, core_threshold = 0.85)
+rules <- makerules(amrrules, minObs = 5, low_threshold = 25, core_threshold = 0.85)
 }
 
 }

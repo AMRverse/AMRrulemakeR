@@ -12,7 +12,7 @@ amrrules_save(
   outdir_name = NULL,
   file_prefix = NULL,
   minObs = 3,
-  weak_threshold = 20,
+  low_threshold = 20,
   bp_site = NULL,
   ruleID_start = 1000,
   mic_S = NULL,
@@ -39,7 +39,7 @@ amrrules_save(
 
 \item{minObs}{The minimum number of observations required to include a rule (default: 3).}
 
-\item{weak_threshold}{The threshold for identifying weak rules (default: 20).}
+\item{low_threshold}{The threshold below which rules are assigned to evidence grade 'low' (default: 20).}
 
 \item{bp_site}{The breakpoint site to filter on (Optional, use the \code{\link{summarise_data}} function to check whether there are different breakpoints for different sites and choose which one to specify here. By default, if multiple breakpoints are available the most conservative will be used.).}
 

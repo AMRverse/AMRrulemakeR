@@ -380,7 +380,7 @@ getBreakpoints <- function(species, guide="EUCAST 2024", antibiotic, type_filter
 #' - Returning a message about the selected site and breakpoint values.
 #'
 #' @examples
-#' checkBreakpoints(species="Escherichia coli", guide="EUCAST 2024"", antibiotic="Ciprofloxacin", assay="MIC")
+#' checkBreakpoints(species="Escherichia coli", guide="EUCAST 2024", antibiotic="Ciprofloxacin", assay="MIC")
 #'
 #' @export
 checkBreakpoints <- function(species, guide="EUCAST 2024", antibiotic, assay="MIC", bp_site=NULL, bp_standard="") {

@@ -50,7 +50,7 @@
 #'
 #' @import dplyr
 #' @import ggplot2
-#' @importFrom AMR as.ab as.mo intrinsic_resistant
+#' @importFrom AMR as.ab as.mo
 #'
 #' @export
 makerules <- function(amrrules, minObs=3, low_threshold=20, core_threshold=0.9,
@@ -167,7 +167,7 @@ makerules <- function(amrrules, minObs=3, low_threshold=20, core_threshold=0.9,
   }
   
   # check if this drug is an expected R or I in this species
-  expected_R <- as.ab(antibiotic) %in% (intrinsic_resistant %>% filter(mo==as.mo(species)) %>% pull(ab))
+  expected_R <- as.ab(antibiotic) %in% (AMR::intrinsic_resistant %>% filter(mo==as.mo(species)) %>% pull(ab))
   if (expected_R) {cat(paste(" ",antibiotic,"is an expected resistance for",species,"\n"))}
   
   expected_I <- FALSE

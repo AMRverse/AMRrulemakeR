@@ -47,3 +47,7 @@ The function first attempts to retrieve breakpoints using the \code{getBreakpoin
 \item Returning a message about the selected site and breakpoint values.
 }
 }
+\examples{
+checkBreakpoints(species="Escherichia coli", guide="EUCAST 2024", antibiotic="Ciprofloxacin", assay="MIC")
+
+}
