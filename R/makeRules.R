@@ -348,7 +348,7 @@ makerules <- function(amrrules, minObs=3, low_threshold=20, core_threshold=0.9,
 
     # get highest call (R>I>S) for any subset of this combination
     if (length(na.omit(subset_rules$`clinical category`))>0) {
-      highest_individual_call <- max(as.sir(subset_rules$`clinical category`), na.rm=T)
+      highest_individual_call <- max(AMR::as.sir(subset_rules$`clinical category`), na.rm=T)
     }
     else(highest_individual_call <- NA)
 
