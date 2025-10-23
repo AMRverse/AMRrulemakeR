@@ -130,7 +130,7 @@ summarise_data <- function(geno_table, pheno_table, antibiotic, drug_class_list,
 #' }
 #'
 #' @export
-amrrules_analysis <- function(geno_table, pheno_table, antibiotic, drug_class_list, species, sir_col="pheno",
+amrrules_analysis <- function(geno_table, pheno_table, antibiotic, drug_class_list, species, sir_col="pheno", ecoff_col="ecoff",
                               geno_sample_col="Name", pheno_sample_col="id", marker_col="marker.label",
                               minPPV=1, mafLogReg=5, mafUpset=5) {
 
@@ -146,10 +146,10 @@ amrrules_analysis <- function(geno_table, pheno_table, antibiotic, drug_class_li
   summary <- safe_execute(summarise_data(geno_table, pheno_table, antibiotic=antibiotic, drug_class_list=drug_class_list, geno_sample_col=geno_sample_col, pheno_sample_col=pheno_sample_col, species=species))
 
   cat("Running solo PPV analysis\n")
-  soloPPV <- safe_execute(AMRgen::solo_ppv_analysis(geno_table=geno_table, pheno_table=pheno_table, antibiotic=antibiotic, drug_class_list=drug_class_list, sir_col=sir_col, min=minPPV, marker_col=marker_col))
+  soloPPV <- safe_execute(AMRgen::solo_ppv_analysis(geno_table=geno_table, pheno_table=pheno_table, antibiotic=antibiotic, drug_class_list=drug_class_list, sir_col=sir_col, ecoff_col=ecoff_col, min=minPPV, marker_col=marker_col))
 
   cat("Running logistic regression\n")
-  logistic <- safe_execute(AMRgen::amr_logistic(geno_table=geno_table, pheno_table=pheno_table, antibiotic=antibiotic, drug_class_list=drug_class_list, sir_col=sir_col, maf=mafLogReg, geno_sample_col=geno_sample_col, pheno_sample_col=pheno_sample_col, marker_col=marker_col, ecoff_col=NULL))
+  logistic <- safe_execute(AMRgen::amr_logistic(geno_table=geno_table, pheno_table=pheno_table, antibiotic=antibiotic, drug_class_list=drug_class_list, sir_col=sir_col, ecoff_col=ecoff_col, maf=mafLogReg, geno_sample_col=geno_sample_col, pheno_sample_col=pheno_sample_col, marker_col=marker_col, ecoff_col=NULL))
 
   cat("Summarising stats\n")
   allstatsR <- safe_execute(AMRgen::merge_logreg_soloppv(logistic$modelR, soloPPV$solo_stats %>% filter(category=="R"),
@@ -195,11 +195,11 @@ amrrules_analysis <- function(geno_table, pheno_table, antibiotic, drug_class_li
     select(-n) %>% right_join(afp_hits, by=marker_col)
 
   # merge geno/pheno and count unique sources per gene + pheno/mic/disk
-  soloPPV$amr_binary <- pheno_table %>% select(any_of(c("id", "source", "pheno", "mic", "disk"))) %>%
-    left_join(soloPPV$amr_binary, by=c("id", "pheno", "mic", "disk"))
+  soloPPV$amr_binary <- pheno_table %>% select(any_of(c(pheno_sample_col, "source", pheno_col, "mic", "disk"))) %>% 
+    left_join(soloPPV$amr_binary, by=c(pheno_sample_col, pheno_col, "mic", "disk"))
 
-  soloPPV$solo_binary <- pheno_table %>% select(any_of(c("id", "source", "pheno", "mic", "disk"))) %>%
-    left_join(soloPPV$solo_binary, by=c("id", "pheno", "mic", "disk"))
+  soloPPV$solo_binary <- pheno_table %>% select(any_of(c(pheno_sample_col, "source", pheno_col, "mic", "disk"))) %>%
+    left_join(soloPPV$solo_binary, by=c(pheno_sample_col, pheno_col, "mic", "disk"))
 
   return(list(reference_mic_plot=reference_mic_plot,
               reference_disk_plot=reference_disk_plot,
