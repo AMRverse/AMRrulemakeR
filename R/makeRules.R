@@ -87,6 +87,7 @@ makerules <- function(amrrules, minObs=3, low_threshold=20, core_threshold=0.9,
 
   # retrieve MIC breakpoints/ECOFF if needed
   if (use_mic) {
+    bp_standard_mic <- bp_site
 
     # check we have MIC data
     if (is.null(amrrules$upset_mic_summary)) {stop("'use_mic' set to TRUE but there are is no MIC summary data ($upset_mic_summary) in the input object")}
@@ -133,6 +134,8 @@ makerules <- function(amrrules, minObs=3, low_threshold=20, core_threshold=0.9,
   }
 
   if (use_disk) {
+    bp_standard_disk <- bp_site
+    
     if (is.null(disk_S) | is.null(disk_R)) { # determine disk diffusion breakpoints
       bp <-checkBreakpoints(species, guide, antibiotic, bp_site, assay="DISK")
       disk_S <- bp$breakpoint_S
