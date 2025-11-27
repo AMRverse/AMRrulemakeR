@@ -11,6 +11,7 @@ amrrules_analysis(
   drug_class_list,
   species,
   sir_col = "pheno",
+  ecoff_col = "ecoff",
   geno_sample_col = "Name",
   pheno_sample_col = "id",
   marker_col = "marker.label",

@@ -18,5 +18,5 @@ Imports:
 Depends: 
     R (>= 3.5)
 LazyData: true
-RoxygenNote: 7.3.2
+RoxygenNote: 7.3.3
 Roxygen: list(markdown = TRUE)

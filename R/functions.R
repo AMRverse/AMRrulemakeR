@@ -27,8 +27,7 @@
 #' @export
 summarise_data <- function(geno_table, pheno_table, antibiotic, drug_class_list,
                            geno_sample_col="Name", pheno_sample_col="id", species, guide="EUCAST 2025") {
-  geno_rows <- geno_table %>% filter(drug_class %in% drug_class_list)
-  geno_samples <- geno_rows %>% pull(get(geno_sample_col)) %>% unique()
+  geno_samples <- geno_table %>% pull(get(geno_sample_col)) %>% unique()
 
   pheno_rows <- pheno_table %>% filter(drug_agent==as.ab(antibiotic))
   pheno_rows_mic <- pheno_rows %>% filter(!is.na(mic))
@@ -37,27 +36,27 @@ summarise_data <- function(geno_table, pheno_table, antibiotic, drug_class_list,
   pheno_samples_mic <- pheno_rows_mic %>% pull(get(pheno_sample_col)) %>% unique()
   pheno_samples_disk <- pheno_rows_disk %>% pull(get(pheno_sample_col)) %>% unique()
 
-  breakpoints <- getBreakpoints(species, guide, antibiotic, type_filter="human")
+  breakpoints_eucast <- getBreakpoints(species, guide, antibiotic, type_filter="human", guide="EUCAST")
+  breakpoints_clsi <- getBreakpoints(species, guide, antibiotic, type_filter="human", guide="CLSI")
+  ecoff <- getBreakpoints(species, guide, antibiotic, type_filter="ECOFF")
 
-  summary <- rbind(c(paste("Samples with", paste0(drug_class_list,collapse="/"),"genotypes:"), length(geno_samples)),
-                   c(paste("Samples with", antibiotic,"phenotypes:"), length(pheno_samples)),
+  summary <- rbind(c(paste("Samples with", antibiotic,"phenotypes:"), length(pheno_samples)),
                    c(" - MIC", length(pheno_samples_mic)),
                    c(" - DISK", length(pheno_samples_disk)),
                    c(paste("Samples with genotypes and phenotypes:"), sum(geno_samples %in% pheno_samples)),
                    c(" - MIC", sum(geno_samples %in% pheno_samples_mic)),
                    c(" - DISK", sum(geno_samples %in% pheno_samples_disk)),
-                   c("EUCAST breakpoint sites:", nrow(breakpoints))
+                   c("EUCAST breakpoint sites:", nrow(breakpoints_eucast))
   )
-  if (nrow(breakpoints)>0) {
-    for (i in 1:nrow(breakpoints)) {
+  if (nrow(breakpoints_eucast)>0) {
+    for (i in 1:nrow(breakpoints_eucast)) {
       summary <- rbind(summary,
-                       c(paste0(" - ", breakpoints$method[i], " / ",breakpoints$site[i]),
-                         paste0(breakpoints$breakpoint_S[i], ", ", breakpoints$breakpoint_R[i]))
+                       c(paste0(" - ", breakpoints_eucast$method[i], " / ",breakpoints_eucast$site[i]),
+                         paste0(breakpoints_eucast$breakpoint_S[i], ", ", breakpoints_eucast$breakpoint_R[i]))
       )
     }
   }
 
-  ecoff <- getBreakpoints(species, guide, antibiotic, type_filter="ECOFF")
   if (nrow(ecoff)>0) {
     summary <- rbind(summary,c("EUCAST ECOFFs:", nrow(ecoff)))
     for (i in 1:nrow(ecoff)) {
@@ -92,6 +91,7 @@ summarise_data <- function(geno_table, pheno_table, antibiotic, drug_class_list,
 #' @param minPPV Minimum number of samples required for a marker to be included in PPV analysis (default: 1).
 #' @param mafLogReg Minor allele frequency threshold for logistic regression inclusion (default: 5).
 #' @param mafUpset Minor allele frequency threshold for upset plot inclusion (default: 5).
+#' @param info Data frame indicating information about each sample, so we can summarise the source/s of data supporting each rule. First column should be sample id, matching that in the `pheno_table` object.
 #'
 #' @return A list containing:
 #' \item{reference_mic_plot}{EUCAST reference MIC distribution plot}
@@ -132,7 +132,7 @@ summarise_data <- function(geno_table, pheno_table, antibiotic, drug_class_list,
 #' @export
 amrrules_analysis <- function(geno_table, pheno_table, antibiotic, drug_class_list, species, sir_col="pheno", ecoff_col="ecoff",
                               geno_sample_col="Name", pheno_sample_col="id", marker_col="marker.label",
-                              minPPV=1, mafLogReg=5, mafUpset=5) {
+                              minPPV=1, mafLogReg=5, mafUpset=5, info=NULL) {
 
   # plot EUCAST reference distributions
   reference_mic <- safe_execute(AMRgen::get_eucast_mic_distribution(antibiotic, species))
@@ -149,33 +149,39 @@ amrrules_analysis <- function(geno_table, pheno_table, antibiotic, drug_class_li
   soloPPV <- safe_execute(AMRgen::solo_ppv_analysis(geno_table=geno_table, pheno_table=pheno_table, antibiotic=antibiotic, drug_class_list=drug_class_list, sir_col=sir_col, ecoff_col=ecoff_col, min=minPPV, marker_col=marker_col))
 
   cat("Running logistic regression\n")
-  logistic <- safe_execute(AMRgen::amr_logistic(geno_table=geno_table, pheno_table=pheno_table, antibiotic=antibiotic, drug_class_list=drug_class_list, sir_col=sir_col, ecoff_col=ecoff_col, maf=mafLogReg, geno_sample_col=geno_sample_col, pheno_sample_col=pheno_sample_col, marker_col=marker_col, ecoff_col=NULL))
+  logistic <- safe_execute(AMRgen::amr_logistic(geno_table=geno_table, pheno_table=pheno_table, antibiotic=antibiotic, drug_class_list=drug_class_list, sir_col=sir_col, ecoff_col=ecoff_col, maf=mafLogReg, geno_sample_col=geno_sample_col, pheno_sample_col=pheno_sample_col, marker_col=marker_col))
 
   cat("Summarising stats\n")
-  allstatsR <- safe_execute(AMRgen::merge_logreg_soloppv(logistic$modelR, soloPPV$solo_stats %>% filter(category=="R"),
+  if (!is.null(logistic$modelR)) {
+    allstatsR <- safe_execute(AMRgen::merge_logreg_soloppv(logistic$modelR, soloPPV$solo_stats %>% filter(category=="R"),
                                                  title=paste0(paste0(drug_class_list, collapse="/")," markers vs ",antibiotic, " R")))
+  } else {allstatsR <- NULL}
 
-  allstatsNWT <- safe_execute(AMRgen::merge_logreg_soloppv(logistic$modelNWT, soloPPV$solo_stats %>% filter(category=="NWT"),
+  if (!is.null(logistic$modelNWT)) {
+    allstatsNWT <- safe_execute(AMRgen::merge_logreg_soloppv(logistic$modelNWT, soloPPV$solo_stats %>% filter(category=="NWT"),
                                                    title=paste0(paste0(drug_class_list, collapse="/")," markers vs ",antibiotic, " NWT")))
+  } else {allstatsNWT <- NULL}
 
   # combined PPV/logistic plot
-  ppv_logistic_plot <- safe_execute(soloPPV$combined_plot + AMRgen::compare_estimates(logistic$modelNWT, logistic$modelR, title1="NWT", title2="R",
-                                                                              colors=c(NWT="blue4", R="maroon"), y_title="",
-                                                                              marker_order=levels(as.factor(soloPPV$solo_stats$marker))) +
-                                      theme(legend.position="none") + ggtitle("Logistic regression", subtitle="for R and NWT"))
+  ppv_logistic_plot <- safe_execute(soloPPV$combined_plot + logistic$plot + scale_y_discrete(limits = levels(as.factor(soloPPV$solo_stats$marker))) + labs(y="") +
+                                      theme(legend.position="none") + ggtitle("Logistic regression"))
 
   cat("Generating upset plots\n")
 
-  upset_mic <- safe_execute(AMRgen::amr_upset(soloPPV$amr_binary %>% filter(!is.na(pheno)), min_set_size=mafUpset, order="value", assay="mic"))
+  cat("...MIC ")
+  upset_mic <- safe_execute(AMRgen::amr_upset(soloPPV$amr_binary, min_set_size=mafUpset, order="value", assay="mic"))
 
-  upset_disk <- safe_execute(AMRgen::amr_upset(soloPPV$amr_binary %>% filter(!is.na(pheno)), min_set_size=mafUpset, order="value", assay="disk"))
+  cat("...disk ")
+  upset_disk <- safe_execute(AMRgen::amr_upset(soloPPV$amr_binary, min_set_size=mafUpset, order="value", assay="disk"))
+  
+  cat("\n")
   
   if (!is.null(upset_mic$summary) & !is.null(upset_disk$summary)) {
     combination_summary_values <- safe_execute(full_join(upset_mic$summary, upset_disk$summary, by=c("marker_list", "marker_count"), suffix=c(".mic", ".disk")))
-  } else {
-    combination_summary_values <- NULL
-  }
+  } else { combination_summary_values <- NULL }
 
+  cat("Extracting gene info\n")
+  
   # return AMRFP info for all unique markers in this class with any pheno data
   overlap <- AMRgen::compare_geno_pheno_id(geno_table %>% filter(drug_class %in% drug_class_list),
                                    pheno_table %>% filter(drug_agent==as.ab(antibiotic)),
@@ -184,7 +190,7 @@ amrrules_analysis <- function(geno_table, pheno_table, antibiotic, drug_class_li
 
   afp_hits <- overlap$geno_matched %>%
     filter(`Element type`=="AMR") %>%
-    select(any_of(c("marker", "gene", "mutation", "node", "variation type", "marker.label", "Gene symbol", "Element subtype", "Hierarchy node", "HMM id"))) %>%
+    select(any_of(c("marker", "gene", "mutation", "node", "variation type", "marker.label", "Gene symbol", "Element subtype", "HMM id"))) %>%
     distinct()
 
   # add gene frequencies to help define core/accessory
@@ -194,13 +200,13 @@ amrrules_analysis <- function(geno_table, pheno_table, antibiotic, drug_class_li
     mutate(freq=n/length(unique(overlap$geno_matched$id))) %>%
     select(-n) %>% right_join(afp_hits, by=marker_col)
 
-  # merge geno/pheno and count unique sources per gene + pheno/mic/disk
-  soloPPV$amr_binary <- pheno_table %>% select(any_of(c(pheno_sample_col, "source", pheno_col, "mic", "disk"))) %>% 
-    left_join(soloPPV$amr_binary, by=c(pheno_sample_col, pheno_col, "mic", "disk"))
-
-  soloPPV$solo_binary <- pheno_table %>% select(any_of(c(pheno_sample_col, "source", pheno_col, "mic", "disk"))) %>%
-    left_join(soloPPV$solo_binary, by=c(pheno_sample_col, pheno_col, "mic", "disk"))
-
+  # extract info for relevant samples
+  if (!is.null(info)) {
+    samples_with_pheno <- pheno_table %>% filter(drug_agent==as.ab(antibiotic))
+    colnames(info)[1] <- "id"
+    info <- info %>% filter(id %in% samples_with_pheno$id)
+  }
+  
   return(list(reference_mic_plot=reference_mic_plot,
               reference_disk_plot=reference_disk_plot,
               summary=summary,
@@ -222,7 +228,8 @@ amrrules_analysis <- function(geno_table, pheno_table, antibiotic, drug_class_li
               combination_summary_values=combination_summary_values,
               afp_hits=afp_hits,
               species=species,
-              antibiotic=antibiotic))
+              antibiotic=antibiotic,
+              info=info))
 }
 
 #' Save AMR Geno-Pheno Analysis Results and Plots to Files and Draft AMRrules
@@ -266,10 +273,10 @@ amrrules_analysis <- function(geno_table, pheno_table, antibiotic, drug_class_li
 amrrules_save <- function(amrrules, width=9, height=9, dir_path, outdir_name=NULL, file_prefix=NULL, 
                           minObs=3, low_threshold=20, bp_site=NULL, ruleID_start=1000, 
                           mic_S=NULL, mic_R=NULL, disk_S=NULL, disk_R=NULL, 
-                          use_disk=TRUE, makeRules=TRUE, guide="EUCAST 2025") {
+                          use_mic=TRUE, use_disk=TRUE, makeRules=TRUE, guide="EUCAST 2025") {
 
-  if (is.null(outdir_name)) { outdir_name <- amrrules$antibiotic }
-  if (is.null(file_prefix)) { file_prefix <- amrrules$antibiotic }
+  if (is.null(outdir_name)) { outdir_name <- gsub("/","_",amrrules$antibiotic) }
+  if (is.null(file_prefix)) { file_prefix <- gsub("/","_",amrrules$antibiotic) }
 
   outdir_path <- file.path(dir_path, outdir_name)
   if (!dir.exists(outdir_path)) {
@@ -365,7 +372,6 @@ getBreakpoints <- function(species, guide="EUCAST 2024", antibiotic, type_filter
 #' @param guide A character string indicating the guideline for breakpoints (default, "EUCAST 2024").
 #' @param antibiotic A character string indicating the antibiotic for which to check breakpoints (e.g., "Ciprofloxacin").
 #' @param bp_site A character string specifying the breakpoint site to use (optional). If provided, the function uses this site; otherwise, if different breakpoints are specified for different sites it selects the one with the highest susceptibility breakpoint.
-#' @param bp_standard A character string to return as the breakpoint standard (optional). This is updated with the selected breakpoint site.
 #' @param assay A character string specifying the assay type (either "MIC" or "Disk"). Default is "MIC".
 #'
 #' @return A list containing:
@@ -383,34 +389,36 @@ getBreakpoints <- function(species, guide="EUCAST 2024", antibiotic, type_filter
 #' checkBreakpoints(species="Escherichia coli", guide="EUCAST 2024", antibiotic="Ciprofloxacin", assay="MIC")
 #'
 #' @export
-checkBreakpoints <- function(species, guide="EUCAST 2024", antibiotic, assay="MIC", bp_site=NULL, bp_standard="") {
+checkBreakpoints <- function(species, guide="EUCAST 2024", antibiotic, assay="MIC", bp_site=NULL) {
   breakpoints <- getBreakpoints(species, guide, antibiotic) %>% filter(method==assay)
   if (nrow(breakpoints)==0) {stop(paste("Could not determine",assay,"breakpoints using AMR package, please provide your own breakpoints"))}
   else{
     breakpoint_sites <- unique(breakpoints$site)
     breakpoint_message_multibp <- NA
+    bp_standard="-"
     # handle multiple breakpoints (e.g. for different conditions)
     if (length(breakpoint_sites)>1) {
       breakpoint_message_multibp <- paste("NOTE: Multiple breakpoint entries, for different sites:", paste(breakpoint_sites, collapse="; "))
       if (length(unique(breakpoints$breakpoint_R))==1 & length(unique(breakpoints$breakpoint_S))==1) {
         breakpoints <- breakpoints %>% arrange(-breakpoint_S) %>% first()
         breakpoint_message_multibp <- paste0(breakpoint_message_multibp, ". However S and R breakpoints are the same.")
+        bp_standard<-breakpoints$site
       }
       else if (is.null(bp_site)) {
         breakpoints <- breakpoints %>% arrange(-breakpoint_S) %>% first()
         breakpoint_message_multibp <- paste0(breakpoint_message_multibp, ". Using the one with the highest S breakpoint (", breakpoints$site,").")
-        bp_standard <- paste0(" (", breakpoints$site, ")")
+        bp_standard<-breakpoints$site
       }
       else {
         if (bp_site %in% breakpoint_sites) {
           breakpoints <- breakpoints %>% filter(site==bp_site)
           breakpoint_message_multibp <- paste0(breakpoint_message_multibp, ". Using the specified site (", bp_site,").")
-          bp_standard <- paste0(" (", bp_site, ")")
+          bp_standard<-breakpoints$site
         }
         else {
           breakpoints <- breakpoints %>% arrange(-breakpoint_S) %>% first()
           breakpoint_message_multibp <- paste0(breakpoint_message_multibp, ". Could not find the specified site (", bp_site,"), so using the one with the highest S breakpoint (", breakpoints$site,").")
-          bp_standard <- paste0(" (", breakpoints$site, ")")
+          bp_standard <- breakpoints$site
         }
       }
     }
@@ -505,4 +513,53 @@ getSources <- function(amr_binary, combo, assay) {
     rename_with(.fn = ~ paste0(assay,".", .x))
 
   return(sources)
+}
+
+enumerate_source_info <- function(data, info, solo_binary, amr_binary, column="source", use_mic=NULL, use_disk=NULL) {
+  if (column %in% colnames(info)) {
+    solo_sources <- solo_binary %>%
+      left_join(info, by="id") %>%
+      filter(!is.na(pheno) & !is.na(marker) & value==1) %>%
+      select(all_of(column), marker) %>% distinct() %>%
+      group_by(marker) %>% count(name=paste0("solo.",column,"s"))
+    
+    # add sources per pheno value
+    solo_sources <- solo_binary %>%
+      left_join(info, by="id") %>%
+      filter(!is.na(pheno) & !is.na(marker) & value==1) %>%
+      select(all_of(column), marker, pheno) %>% distinct() %>%
+      group_by(marker, pheno) %>% count() %>%
+      pivot_wider(names_from=pheno, names_prefix=paste0("solo.",column,"s."), values_from=n, values_fill=0) %>%
+      left_join(solo_sources, by="marker")
+    
+    data <- data %>% left_join(solo_sources, by="marker")
+    
+    amr_binary <- amr_binary %>% left_join(info, by="id")
+    
+    if (use_mic) {
+      data <- data %>% rowwise() %>% 
+        mutate(source_info=getSources(amr_binary, marker, "mic")) %>% 
+        unnest_wider(source_info) %>% ungroup()
+    }
+    
+    if (use_disk) {
+      data <- data %>% rowwise() %>% 
+        mutate(source_info=getSources(amr_binary, marker, "disk")) %>% 
+        unnest_wider(source_info) %>% ungroup()
+    }
+    
+    source_names <- c(paste0(column,"s"), paste0(column,"s.S"), paste0(column,"s.I"), paste0(column,"s.R"))
+    
+    data <- add_missing_cols(data, c(paste0("solo.",source_names), paste0("disk.",source_names), paste0("mic.",source_names))) %>%
+      mutate(solo.sources.SIR = if_else(!is.na(solo.sources),
+                                        paste0(na0(solo.sources.S), " S, ", na0(solo.sources.I), " I, ", na0(solo.sources.R), " R"),
+                                        "-")) %>%
+      mutate(mic.sources.SIR = if_else(!is.na(mic.sources) & use_mic,
+                                       paste0(na0(mic.sources.S), " S, ", na0(mic.sources.I), " I, ", na0(mic.sources.R), " R"),
+                                       "-")) %>%
+      mutate(disk.sources.SIR = if_else(!is.na(disk.sources) & use_disk,
+                                        paste0(na0(disk.sources.S), " S, ", na0(disk.sources.I), " I, ", na0(disk.sources.R), " R"),
+                                        "-"))
+  }
+  return(data)
 }
