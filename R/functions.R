@@ -163,7 +163,7 @@ amrrules_analysis <- function(geno_table, pheno_table, antibiotic, drug_class_li
   } else {allstatsNWT <- NULL}
 
   # combined PPV/logistic plot
-  ppv_logistic_plot <- safe_execute(soloPPV$combined_plot + logistic$plot + scale_y_discrete(limits = levels(as.factor(soloPPV$solo_stats$marker))) + labs(y="") +
+  ppv_logistic_plot <- safe_execute(soloPPV$combined_plot + logistic$plot + scale_y_discrete(limits = names(soloPPV$plot_order)) + labs(y="") +
                                       theme(legend.position="none") + ggtitle("Logistic regression"))
 
   cat("Generating upset plots\n")
@@ -196,9 +196,9 @@ amrrules_analysis <- function(geno_table, pheno_table, antibiotic, drug_class_li
   # add gene frequencies to help define core/accessory
   afp_hits <- overlap$geno_matched %>%
     group_by(!!sym(marker_col)) %>%
-    count() %>%
-    mutate(freq=n/length(unique(overlap$geno_matched$id))) %>%
-    select(-n) %>% right_join(afp_hits, by=marker_col)
+    summarise(freq_n=n()) %>%
+    mutate(freq=freq_n/length(unique(overlap$geno_matched$id))) %>%
+    right_join(afp_hits, by=marker_col)
 
   # extract info for relevant samples
   if (!is.null(info)) {
@@ -292,9 +292,9 @@ amrrules_save <- function(amrrules, width=9, height=9, dir_path, outdir_name=NUL
   if (!is.null(amrrules$reference_disk_plot)) {safe_execute(ggsave(amrrules$reference_disk_plot, filename=paste0(outpath,"_reference_disk_plot.pdf"), width=width, height=height))}
   if (!is.null(amrrules$ppv_plot)) {safe_execute(ggsave(amrrules$ppv_plot, filename=paste0(outpath,"_soloPPV_plot.pdf"), width=width, height=height))}
   if (!is.null(amrrules$logistic_plot)) {safe_execute(ggsave(amrrules$logistic_plot, filename=paste0(outpath,"_logistic_plot.pdf"), width=width, height=height))}
-  if (!is.null(amrrules$ppv_logistic_plot)) {safe_execute(ggsave(amrrules$ppv_logistic_plot, filename=paste0(outpath,"_soloPPV_logistic_plot.pdf"), width=width, height=height))}
-  if (!is.null(amrrules$upset_mic_plot)) {safe_execute(ggsave(amrrules$upset_mic_plot, filename=paste0(outpath,"_MIC_upset_plot.pdf"), width=width, height=height))}
-  if (!is.null(amrrules$upset_disk_plot)) {safe_execute(ggsave(amrrules$upset_disk_plot, filename=paste0(outpath,"_disk_upset_plot.pdf"), width=width, height=height))}
+  if (!is.null(amrrules$ppv_logistic_plot)) {safe_execute(ggsave(amrrules$ppv_logistic_plot, filename=paste0(outpath,"_soloPPV_logistic_plot.pdf"), width=width*1.5, height=height))}
+  if (!is.null(amrrules$upset_mic_plot)) {safe_execute(ggsave(amrrules$upset_mic_plot, filename=paste0(outpath,"_MIC_upset_plot.pdf"), width=width*1.5, height=height))}
+  if (!is.null(amrrules$upset_disk_plot)) {safe_execute(ggsave(amrrules$upset_disk_plot, filename=paste0(outpath,"_disk_upset_plot.pdf"), width=width*1.5, height=height))}
 
   safe_execute(readr::write_tsv(as.data.frame(amrrules$summary), col_names=F, file=paste0(outpath,"_data_summary.tsv")))
   safe_execute(readr::write_tsv(amrrules$allstatsR, file=paste0(outpath,"_stats_R.tsv")))
@@ -486,19 +486,24 @@ getGenes <- function(data, combo) {
   else{ return(combo)}
 }
 
-getSources <- function(amr_binary, combo, assay) {
+getSources <- function(amr_binary, combo, assay, exclude_range_values=FALSE) {
 
   # assume combo list is in proper syntax (with ':') but amr_binary has colnames with '..' in place of ':'
   marker_names <- unlist(str_split(gsub(":", "..", combo), ", "))
 
-  total_sources <- amr_binary %>%
-    filter(!is.na(get(assay))) %>%
+  dat <- amr_binary %>%
+    filter(!is.na(get(assay))) 
+    
+  if (exclude_range_values) {
+    dat <- dat %>% filter(!grepl("<|>", as.character(mic)))
+  }
+  
+  total_sources <- dat %>%
     select(source, all_of(marker_names)) %>%
     filter(if_all(all_of(marker_names), ~ . == 1)) %>%
     distinct() %>% nrow()
 
-  sources_per_pheno <- amr_binary %>%
-    filter(!is.na(get(assay))) %>%
+  sources_per_pheno <- dat %>%
     select(source, pheno, all_of(marker_names)) %>%
     filter(if_all(all_of(marker_names), ~ . == 1)) %>%
     distinct() %>%
@@ -509,28 +514,65 @@ getSources <- function(amr_binary, combo, assay) {
   sources <- as_tibble(c(sources=total_sources, sources_per_pheno))
 
   source_names <- c("sources", "sources.S", "sources.I", "sources.R")
+  
+  if (exclude_range_values) {
+    prefix <- paste0(assay,".x.")
+  } else {prefix <- paste0(assay,".")}
+  
   sources <- add_missing_cols(sources, source_names) %>%
-    rename_with(.fn = ~ paste0(assay,".", .x))
-
+    rename_with(.fn = ~ paste0(prefix, .x))
+  
   return(sources)
 }
 
 enumerate_source_info <- function(data, info, solo_binary, amr_binary, column="source", use_mic=NULL, use_disk=NULL) {
   if (column %in% colnames(info)) {
-    solo_sources <- solo_binary %>%
+    solo_sources_pheno <- solo_binary %>%
       left_join(info, by="id") %>%
       filter(!is.na(pheno) & !is.na(marker) & value==1) %>%
       select(all_of(column), marker) %>% distinct() %>%
-      group_by(marker) %>% count(name=paste0("solo.",column,"s"))
+      group_by(marker) %>% count(name=paste0("solo.",column,"s_pheno"))
+    
+    solo_sources_ecoff <- solo_binary %>%
+      left_join(info, by="id") %>%
+      filter(!is.na(ecoff) & !is.na(marker) & value==1) %>%
+      select(all_of(column), marker) %>% distinct() %>%
+      group_by(marker) %>% count(name=paste0("solo.",column,"s_ecoff"))
+    
+    # in case we have markers where only solo observations have an ecoff call or pheno call but not both
+    solo_sources <- full_join(solo_sources_pheno, solo_sources_ecoff, by="marker") %>% 
+      ungroup() %>% rowwise() %>%
+      mutate(solo.sources = max(c_across(c(2, 3)), na.rm = TRUE)) %>%
+      ungroup() %>%
+      select(marker, solo.sources)
     
     # add sources per pheno value
-    solo_sources <- solo_binary %>%
+    solo_sources_per_pheno <- solo_binary %>%
       left_join(info, by="id") %>%
       filter(!is.na(pheno) & !is.na(marker) & value==1) %>%
       select(all_of(column), marker, pheno) %>% distinct() %>%
       group_by(marker, pheno) %>% count() %>%
-      pivot_wider(names_from=pheno, names_prefix=paste0("solo.",column,"s."), values_from=n, values_fill=0) %>%
-      left_join(solo_sources, by="marker")
+      pivot_wider(names_from=pheno, names_prefix=paste0("pheno_solo.",column,"s."), values_from=n, values_fill=0)
+    
+    solo_sources_per_ecoff <- solo_binary %>%
+      left_join(info, by="id") %>%
+      filter(!is.na(ecoff) & !is.na(marker) & value==1) %>%
+      select(all_of(column), marker, ecoff) %>% distinct() %>%
+      group_by(marker, ecoff) %>% count() %>%
+      pivot_wider(names_from=ecoff, names_prefix=paste0("ecoff_solo.",column,"s."), values_from=n, values_fill=0) 
+    
+    solo_sources_per <- full_join(solo_sources_per_pheno, solo_sources_per_ecoff, by="marker") %>% 
+      ungroup() %>% rowwise() %>%
+      mutate(solo.sources.R=suppressWarnings(max(c_across(matches("solo\\.sources.R")), na.rm = TRUE))) %>% 
+      mutate(solo.sources.R=if_else(is.infinite(solo.sources.R),0,solo.sources.R)) %>%
+      mutate(solo.sources.I=suppressWarnings(max(c_across(matches("solo\\.sources.I")), na.rm = TRUE))) %>% 
+      mutate(solo.sources.I=if_else(is.infinite(solo.sources.I),0,solo.sources.I)) %>%
+      mutate(solo.sources.S=suppressWarnings(max(c_across(matches("solo\\.sources.S")), na.rm = TRUE))) %>% 
+      mutate(solo.sources.S=if_else(is.infinite(solo.sources.S),0,solo.sources.S)) %>%
+      ungroup() %>%
+      select(any_of(c("marker", "solo.sources.R", "solo.sources.I", "solo.sources.S")))
+      
+    solo_sources <- full_join(solo_sources, solo_sources_per, by="marker")
     
     data <- data %>% left_join(solo_sources, by="marker")
     
@@ -539,6 +581,10 @@ enumerate_source_info <- function(data, info, solo_binary, amr_binary, column="s
     if (use_mic) {
       data <- data %>% rowwise() %>% 
         mutate(source_info=getSources(amr_binary, marker, "mic")) %>% 
+        unnest_wider(source_info) %>% ungroup()
+      
+      data <- data %>% rowwise() %>% 
+        mutate(source_info=getSources(amr_binary, marker, "mic", exclude_range_values=TRUE)) %>% 
         unnest_wider(source_info) %>% ungroup()
     }
     
@@ -556,6 +602,9 @@ enumerate_source_info <- function(data, info, solo_binary, amr_binary, column="s
                                         "-")) %>%
       mutate(mic.sources.SIR = if_else(!is.na(mic.sources) & use_mic,
                                        paste0(na0(mic.sources.S), " S, ", na0(mic.sources.I), " I, ", na0(mic.sources.R), " R"),
+                                       "-")) %>%
+      mutate(mic.x.sources.SIR = if_else(!is.na(mic.x.sources) & use_mic,
+                                       paste0(na0(mic.x.sources.S), " S, ", na0(mic.x.sources.I), " I, ", na0(mic.x.sources.R), " R"),
                                        "-")) %>%
       mutate(disk.sources.SIR = if_else(!is.na(disk.sources) & use_disk,
                                         paste0(na0(disk.sources.S), " S, ", na0(disk.sources.I), " I, ", na0(disk.sources.R), " R"),

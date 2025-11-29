@@ -19,6 +19,7 @@ amrrules_save(
   mic_R = NULL,
   disk_S = NULL,
   disk_R = NULL,
+  use_mic = TRUE,
   use_disk = TRUE,
   makeRules = TRUE,
   guide = "EUCAST 2025"

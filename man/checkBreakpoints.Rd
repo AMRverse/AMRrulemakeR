@@ -9,8 +9,7 @@ checkBreakpoints(
   guide = "EUCAST 2024",
   antibiotic,
   assay = "MIC",
-  bp_site = NULL,
-  bp_standard = ""
+  bp_site = NULL
 )
 }
 \arguments{
@@ -23,8 +22,6 @@ checkBreakpoints(
 \item{assay}{A character string specifying the assay type (either "MIC" or "Disk"). Default is "MIC".}
 
 \item{bp_site}{A character string specifying the breakpoint site to use (optional). If provided, the function uses this site; otherwise, if different breakpoints are specified for different sites it selects the one with the highest susceptibility breakpoint.}
-
-\item{bp_standard}{A character string to return as the breakpoint standard (optional). This is updated with the selected breakpoint site.}
 }
 \value{
 A list containing:

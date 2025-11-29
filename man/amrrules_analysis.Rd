@@ -17,7 +17,8 @@ amrrules_analysis(
   marker_col = "marker.label",
   minPPV = 1,
   mafLogReg = 5,
-  mafUpset = 5
+  mafUpset = 5,
+  info = NULL
 )
 }
 \arguments{
@@ -44,6 +45,8 @@ amrrules_analysis(
 \item{mafLogReg}{Minor allele frequency threshold for logistic regression inclusion (default: 5).}
 
 \item{mafUpset}{Minor allele frequency threshold for upset plot inclusion (default: 5).}
+
+\item{info}{Data frame indicating information about each sample, so we can summarise the source/s of data supporting each rule. First column should be sample id, matching that in the \code{pheno_table} object.}
 }
 \value{
 A list containing:
