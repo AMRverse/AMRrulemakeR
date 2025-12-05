@@ -26,7 +26,7 @@
 #' @param regression Logical indicating whether to consider logistic regression data (only used to define wildtype S for an individual marker, where the p-value exceeds 0.05 and odds ratio crosses 0, and there is no solo-marker data available). Default is `TRUE`.
 #'
 #' @return A list containing 2 data frames:
-#'   - `rules`: The draft rules in AMRrules format (spec v0.5), with some additional quantitative data fields to support review.
+#'   - `rules`: The draft rules in AMRrules format (spec v0.6), with some additional quantitative data fields to support review.
 #'   - `data`: Full set of quantitative data fields used to draft the rules.
 #'
 #' @details
