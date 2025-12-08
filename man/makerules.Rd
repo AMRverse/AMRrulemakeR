@@ -89,7 +89,7 @@ Full data on each marker/combination is also returned in the separate \code{data
 # Example of creating AMR rules
 amrrules <- amrrules_analysis(geno_table, pheno_table, antibiotic = "Ciprofloxacin",
                               drug_class_list = c("Quinolones"), species = "E. coli")
-rules <- makerules(amrrules, minObs = 5, low_threshold = 25, core_threshold = 0.85)
+rules <- makerules(amrrules)
 }
 
 }

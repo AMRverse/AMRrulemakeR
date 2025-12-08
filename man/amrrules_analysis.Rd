@@ -10,14 +10,15 @@ amrrules_analysis(
   antibiotic,
   drug_class_list,
   species,
-  sir_col = "pheno",
+  sir_col = "pheno_eucast",
   ecoff_col = "ecoff",
+  sir_provided_col = "pheno_provided",
   geno_sample_col = "Name",
   pheno_sample_col = "id",
   marker_col = "marker.label",
   minPPV = 1,
   mafLogReg = 5,
-  mafUpset = 5,
+  mafUpset = 1,
   info = NULL
 )
 }
@@ -32,7 +33,11 @@ amrrules_analysis(
 
 \item{species}{A string indicating the species name used for breakpoint and reference distribution lookups (e.g., \code{"E. coli"}).}
 
-\item{sir_col}{The name of the phenotypic classification column to use (default: \code{"pheno"}).}
+\item{sir_col}{The name of the trusted S/I/R classification column to use, e.g. inferred from available MIC and/or disk data (default: \code{"pheno_eucast"}).}
+
+\item{ecoff_col}{The name of the column providing S/R calls indicating the classification of each sample and drug against the ECOFF (default: \code{"ecoff"}).}
+
+\item{sir_provided_col}{The name of the extended S/I/R classification column, e.g. including calls provided as S/I/R but without assay measures to interpret directly (default: \code{"pheno_provided"}).}
 
 \item{geno_sample_col}{The column in \code{geno_table} with sample IDs (default: \code{"Name"}).}
 
@@ -44,7 +49,7 @@ amrrules_analysis(
 
 \item{mafLogReg}{Minor allele frequency threshold for logistic regression inclusion (default: 5).}
 
-\item{mafUpset}{Minor allele frequency threshold for upset plot inclusion (default: 5).}
+\item{mafUpset}{Minor allele frequency threshold for upset plot inclusion (default: 1).}
 
 \item{info}{Data frame indicating information about each sample, so we can summarise the source/s of data supporting each rule. First column should be sample id, matching that in the \code{pheno_table} object.}
 }

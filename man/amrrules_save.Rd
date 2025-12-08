@@ -21,8 +21,8 @@ amrrules_save(
   disk_R = NULL,
   use_mic = TRUE,
   use_disk = TRUE,
-  makeRules = TRUE,
-  guide = "EUCAST 2025"
+  guide = "EUCAST 2025",
+  makeRules = TRUE
 )
 }
 \arguments{
@@ -46,9 +46,21 @@ amrrules_save(
 
 \item{ruleID_start}{The starting numeric ID with which to number rules (integer, default: 1000).}
 
-\item{mic_S}{The MIC breakpoint to define S (Optional, by default breakpoints are extracted from EUCAST using the AMR package, however if none are available or user wants to use a different one e.g. an ECOFF then it can be specified here).}
+\item{mic_S}{The MIC breakpoint to define S (Optional, by default breakpoints are extracted using the AMR package, however if none are available or user wants to use a different one e.g. an ECOFF then it can be specified here).}
 
-\item{mic_R}{The MIC breakpoint to define R (Optional, by default breakpoints are extracted from EUCAST using the AMR package, however if none are available or user wants to use a different one e.g. an ECOFF then it can be specified here).}
+\item{mic_R}{The MIC breakpoint to define R (Optional, by default breakpoints are extracted using the AMR package, however if none are available or user wants to use a different one e.g. an ECOFF then it can be specified here).}
+
+\item{disk_S}{The disk breakpoint to define S (Optional, by default breakpoints are extracted using the AMR package, however if none are available or user wants to use a different one e.g. an ECOFF then it can be specified here).}
+
+\item{disk_R}{The disk breakpoint to define R (Optional, by default breakpoints are extracted using the AMR package, however if none are available or user wants to use a different one e.g. an ECOFF then it can be specified here).}
+
+\item{use_mic}{Logical indicating whether to use MIC data in rule generation. Default is \code{TRUE}.}
+
+\item{use_disk}{Logical indicating whether to use disk diffusion data for rule generation. Default is \code{TRUE}.}
+
+\item{guide}{The guideline to use for breakpoints, when retrieving these from the AMR package. Default is \code{"EUCAST 2025"}.}
+
+\item{makeRules}{Logical indicating whether to use define AMR rules from the data provided. Default is \code{TRUE}.}
 }
 \value{
 A data frame containing the generated AMR rules.
@@ -73,7 +85,9 @@ If no output directory name is provided, the default is the antibiotic name.
 }
 \examples{
 \dontrun{
-amrrules_save(amrrules, dir_path = "output/", outdir_name = "Ciprofloxacin", file_prefix = "Ciprofloxacin")
+amrrules_analysis(geno_table, pheno_table, antibiotic = "Ciprofloxacin",
+                  drug_class_list = c("Quinolones"), species = "E. coli")
+amrrules_save(amrrules, dir_path = "output/", outdir_name = "Ciprofloxacin")
 }
 
 }
