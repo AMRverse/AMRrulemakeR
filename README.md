@@ -77,10 +77,39 @@ For use with the AMRgen & AMRrulemakeR packages, you need to get the AST data in
 Data in NCBI or EBI antibiogram format can be automatically imported to the right dataframe using the `import_ast()` in the AMRgen package.
 Or you can format your data manually. 
 
+Example data frame included in the AMRgen package:
+
+```
+> ecoli_ast
+
+# A tibble: 4,170 × 10
+   id           drug_agent     mic  disk pheno_clsi ecoff guideline method pheno_provided spp_pheno   
+   <chr>        <ab>         <mic> <dsk> <sir>      <sir> <chr>     <chr>  <sir>          <mo>        
+ 1 SAMN36015110 CIP        <128.00    NA   R          R   CLSI      NA       R            B_ESCHR_COLI
+ 2 SAMN11638310 CIP         256.00    NA   R          R   CLSI      NA       R            B_ESCHR_COLI
+ 3 SAMN05729964 CIP          64.00    NA   R          R   CLSI      Etest    R            B_ESCHR_COLI
+ 4 SAMN10620111 CIP         >=4.00    NA   R          R   CLSI      NA       R            B_ESCHR_COLI
+ 5 SAMN10620168 CIP         >=4.00    NA   R          R   CLSI      NA       R            B_ESCHR_COLI
+ 6 SAMN10620104 CIP         <=0.25    NA   S          R   CLSI      NA       S            B_ESCHR_COLI
+
+```
+
 The key fields needed are:
-* `id` - Sample name, must match that in the corresponding genotype file. Best to use INSDC BioSample where available.
+* `id` - Sample name, must match that in the corresponding genotype file.
+    * If using `import_ast()`, this is taken from the biosample field.
 * `drug_agent` - Name of the antibiotic, formatted as class 'ab' (using `as.ab()`)
 * `mic` - MIC assay measurement (where available), formated as class 'mic' (using `as.mic()`). Note that if your input file has MIC value in one column, and sign (e.g. >, <, <=, etc) in another column (e.g. the NCBI antibiogram format), you will need to paste those two columns together first before applying `as.mic()`.
 * `disk` - Disk assay measurement (where available), formated as class 'disk' (using `as.disk()`).
-* 
+* `pheno_eucast`, `pheno_clsi` (can be any name) - A column of class 'sir', indicating the interpretation of the data in `mic` and `disk` as S/I/R, using clinical breakpoints.
+    * If using `import_ast()`, you can set `interpret_eucast=TRUE` and/or `interpret_clsi=TRUE` to generate these fields automatically by interpreting input MIC and disk assay measures against the EUCAST and CLSI breakpoints via the `as.sir()` function in the `AMR` package.
+    * This field will be used as the primary S/I/R data to calculate positive predictive value and defining rules, so should only include calls based on assay measurements such that you can ensure they have been called consistently.
+    * Consider whether disk content has changed since the assays were done, before re-calling disk data with latest breakpoints.
+* `pheno_provided` (can be any name) - A column of class 'sir', indicating S/I/R calls for **all** samples, even those for which the raw assay measures are not available in `mic` or `disk`.
+    * This data will be used as a secondary, 'extended' data source when there is insufficient primary data (with raw assay measures) to define a rule. Such data should be included only when it comes from a reliable source, where you know that the assay and interpretations are trustworthy, and the breakpoints for the relevant bug/drug combinations have not changed since the calls were made. For disk data, it is also important to consider whether disk content has changed since the assays were done.
+* `ecoff` (can be any name) - A column of class 'sir', indicating the interpretation against ECOFF as S/R
+    * If using `import_ast()`, you can set `interpret_ecoff=TRUE` to generate this field automatically by interpreting input MIC and disk assay measures against the EUCAST ECOFF via the `as.sir()` function in the `AMR` package.
+* A column indicating the source of each dataset (this can be any kind of indicator you like, such as bioproject accession, PubMed ID, project name) (e.g. `source`)
+    * If using `import_ast()`, this is taken from the bioproject field (importing from NCBI format) or pubmed field (importing from EBI format)
+* A column indicating the MIC assay method used to generate the measurement (e.g. microbroth dilution, Vitek, Sensititre, BD Phoenix, etc)
+    * If using `import_ast()`, this is taken from the 'Laboratory typing platform' field (importing from NCBI format) or 'phenotype-platform' field (importing from EBI format)
 
