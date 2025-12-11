@@ -200,7 +200,7 @@ na0 <- function(x) {
 add_missing_cols <- function(df, cols) {
   for (col in cols) {
     if (!col %in% names(df)) {
-      df <- df %>% mutate(!!sym(col) := NA)
+      df <- df %>% mutate(!!sym(col) := 0)
     }
   }
   df
@@ -239,12 +239,12 @@ getSources <- function(amr_binary, combo, assay, exclude_range_values=FALSE) {
   marker_names <- unlist(str_split(gsub(":", "..", combo), ", "))
 
   dat <- amr_binary %>%
-    filter(!is.na(get(assay))) 
-    
+    filter(!is.na(get(assay)))
+
   if (exclude_range_values) {
     dat <- dat %>% filter(!grepl("<|>", as.character(mic)))
   }
-  
+
   total_sources <- dat %>%
     #select(source, all_of(marker_names)) %>%
     #filter(if_all(all_of(marker_names), ~ . == 1)) %>%
@@ -265,14 +265,14 @@ getSources <- function(amr_binary, combo, assay, exclude_range_values=FALSE) {
   sources <- as_tibble(c(sources=total_sources, sources_per_pheno))
 
   source_names <- c("sources", "sources.S", "sources.I", "sources.R")
-  
+
   if (exclude_range_values) {
     prefix <- paste0(assay,".x.")
   } else {prefix <- paste0(assay,".")}
-  
+
   sources <- add_missing_cols(sources, source_names) %>%
     rename_with(.fn = ~ paste0(prefix, .x))
-  
+
   return(sources)
 }
 
@@ -283,20 +283,20 @@ enumerate_source_info <- function(data, info, solo_binary, amr_binary, column="s
       filter(!is.na(pheno) & !is.na(marker) & value==1) %>%
       select(all_of(column), marker) %>% distinct() %>%
       group_by(marker) %>% count(name=paste0("solo.",column,"s_pheno"))
-    
+
     solo_sources_ecoff <- solo_binary %>%
       left_join(info, by="id") %>%
       filter(!is.na(ecoff) & !is.na(marker) & value==1) %>%
       select(all_of(column), marker) %>% distinct() %>%
       group_by(marker) %>% count(name=paste0("solo.",column,"s_ecoff"))
-    
+
     # in case we have markers where only solo observations have an ecoff call or pheno call but not both
-    solo_sources <- full_join(solo_sources_pheno, solo_sources_ecoff, by="marker") %>% 
+    solo_sources <- full_join(solo_sources_pheno, solo_sources_ecoff, by="marker") %>%
       ungroup() %>% rowwise() %>%
       mutate(solo.sources = max(c_across(c(2, 3)), na.rm = TRUE)) %>%
       ungroup() %>%
       select(marker, solo.sources)
-    
+
     # add sources per pheno value
     solo_sources_per_pheno <- solo_binary %>%
       left_join(info, by="id") %>%
@@ -304,106 +304,121 @@ enumerate_source_info <- function(data, info, solo_binary, amr_binary, column="s
       select(all_of(column), marker, pheno) %>% distinct() %>%
       group_by(marker, pheno) %>% count() %>%
       pivot_wider(names_from=pheno, names_prefix=paste0("pheno_solo.",column,"s."), values_from=n, values_fill=0)
-    
+
     solo_sources_per_ecoff <- solo_binary %>%
       left_join(info, by="id") %>%
       filter(!is.na(ecoff) & !is.na(marker) & value==1) %>%
       select(all_of(column), marker, ecoff) %>% distinct() %>%
       group_by(marker, ecoff) %>% count() %>%
-      pivot_wider(names_from=ecoff, names_prefix=paste0("ecoff_solo.",column,"s."), values_from=n, values_fill=0) 
-    
-    solo_sources_per <- full_join(solo_sources_per_pheno, solo_sources_per_ecoff, by="marker") %>% 
+      pivot_wider(names_from=ecoff, names_prefix=paste0("ecoff_solo.",column,"s."), values_from=n, values_fill=0)
+
+    solo_sources_per <- full_join(solo_sources_per_pheno, solo_sources_per_ecoff, by="marker") %>%
       ungroup() %>% rowwise() %>%
-      mutate(solo.sources.R=suppressWarnings(max(c_across(matches("solo\\.sources.R")), na.rm = TRUE))) %>% 
+      mutate(solo.sources.R=suppressWarnings(max(c_across(matches("solo\\.sources.R")), na.rm = TRUE))) %>%
       mutate(solo.sources.R=if_else(is.infinite(solo.sources.R),0,solo.sources.R)) %>%
-      mutate(solo.sources.I=suppressWarnings(max(c_across(matches("solo\\.sources.I")), na.rm = TRUE))) %>% 
+      mutate(solo.sources.I=suppressWarnings(max(c_across(matches("solo\\.sources.I")), na.rm = TRUE))) %>%
       mutate(solo.sources.I=if_else(is.infinite(solo.sources.I),0,solo.sources.I)) %>%
-      mutate(solo.sources.S=suppressWarnings(max(c_across(matches("solo\\.sources.S")), na.rm = TRUE))) %>% 
+      mutate(solo.sources.S=suppressWarnings(max(c_across(matches("solo\\.sources.S")), na.rm = TRUE))) %>%
       mutate(solo.sources.S=if_else(is.infinite(solo.sources.S),0,solo.sources.S)) %>%
       ungroup() %>%
       select(any_of(c("marker", "solo.sources.R", "solo.sources.I", "solo.sources.S")))
-      
+
     solo_sources <- full_join(solo_sources, solo_sources_per, by="marker")
-    
+
     data <- data %>% left_join(solo_sources, by="marker")
-    
+
     amr_binary <- amr_binary %>% left_join(info, by="id")
-    
+
     if (use_mic) {
-      data <- data %>% rowwise() %>% 
-        mutate(source_info=getSources(amr_binary, marker, "mic")) %>% 
+      data <- data %>% rowwise() %>%
+        mutate(source_info=getSources(amr_binary, marker, "mic")) %>%
         unnest_wider(source_info) %>% ungroup()
-      
-      data <- data %>% rowwise() %>% 
-        mutate(source_info=getSources(amr_binary, marker, "mic", exclude_range_values=TRUE)) %>% 
+
+      data <- data %>% rowwise() %>%
+        mutate(source_info=getSources(amr_binary, marker, "mic", exclude_range_values=TRUE)) %>%
         unnest_wider(source_info) %>% ungroup()
     }
-    
+
     if (use_disk) {
-      data <- data %>% rowwise() %>% 
-        mutate(source_info=getSources(amr_binary, marker, "disk")) %>% 
+      data <- data %>% rowwise() %>%
+        mutate(source_info=getSources(amr_binary, marker, "disk")) %>%
         unnest_wider(source_info) %>% ungroup()
     }
-    
+
     source_names <- c(paste0(column,"s"), paste0(column,"s.S"), paste0(column,"s.I"), paste0(column,"s.R"))
-    
+
     data <- add_missing_cols(data, c(paste0("solo.",source_names), paste0("disk.",source_names), paste0("mic.",source_names))) %>%
       mutate(solo.sources.SIR = if_else(!is.na(solo.sources),
                                         paste0(na0(solo.sources.S), " S, ", na0(solo.sources.I), " I, ", na0(solo.sources.R), " R"),
-                                        "-")) %>%
-      mutate(mic.sources.SIR = if_else(!is.na(mic.sources) & use_mic,
-                                       paste0(na0(mic.sources.S), " S, ", na0(mic.sources.I), " I, ", na0(mic.sources.R), " R"),
-                                       "-")) %>%
-      mutate(mic.x.sources.SIR = if_else(!is.na(mic.x.sources) & use_mic,
-                                       paste0(na0(mic.x.sources.S), " S, ", na0(mic.x.sources.I), " I, ", na0(mic.x.sources.R), " R"),
-                                       "-")) %>%
-      mutate(disk.sources.SIR = if_else(!is.na(disk.sources) & use_disk,
-                                        paste0(na0(disk.sources.S), " S, ", na0(disk.sources.I), " I, ", na0(disk.sources.R), " R"),
                                         "-"))
+    if ("mic.sources" %in% colnames(data) & use_mic) {
+      data <- data %>% mutate(mic.sources.SIR = paste0(na0(mic.sources.S), " S, ", na0(mic.sources.I), " I, ", na0(mic.sources.R)))
+    } else {data$mic.sources.SIR <- "-"}
+
+    if ("mic.x.sources" %in% colnames(data) & use_mic) {
+      data <- data %>% mutate(mic.x.sources.SIR = paste0(na0(mic.x.sources.S), " S, ", na0(mic.x.sources.I), " I, ", na0(mic.x.sources.R), " R"))
+    } else {data$mic.x.sources.SIR <- "-"}
+
+    if ("disk.sources" %in% colnames(data) & use_disk) {
+      data <- data %>% mutate(disk.sources.SIR = paste0(na0(disk.sources.S), " S, ", na0(disk.sources.I), " I, ", na0(disk.sources.R), " R"))
+    } else {data$disk.sources.SIR <- "-"}
   }
   return(data)
 }
 
+#' Classify markers as S/I/R and WT/NWT based on solo PPV values
+#'
+#' This function takes as input a dataframe with columns indicating PPV values for R, I and/or NWT, and returns the data frame with new fields indicating the SIR and NWT/WT calls made from the PPV estimates.
+#'
+#' @param data A data frame with column names including PPV estimates, named in the form of 'R.x.ppv', 'I.x.ppv', 'NWT.x.ppv'. This is intended as a helper function, called within the makerules() function.
+#' @param suffix A character string indicating the suffix to append to the field names for the generated category (SIR) and phenotype (NWT/WT) fields.
+#'
+#' @return A copy of the input data frame with new fields indicating the SIR category and NWT/WT phenotype calls made from the PPV estimates.
+#'
+#' @examples
+#' \dontrun{
+#' data <- solo_stats %>%
+#'  pivot_wider(id_cols=marker, names_from=category, values_from=c(ppv, x, n, ci.lower, ci.upper),
+#'            names_glue= "{category}.solo.{.value}") %>%
+#'  categorise_from_PPV(suffix="_soloPPV")
+#' }
+#'
+#' @export
+categorise_from_PPV <- function(data, suffix="") {
 
-categorise_from_PPV <- function(data, suffix="", use_mic=F, mic_S=NULL, mic_R=NULL, use_disk=F, disk_S=NULL, disk_R=NULL) {
   nwt_ppv=grep("^NWT\\..*\\.ppv$", colnames(data), value = TRUE)
   if(length(nwt_ppv)==0) {nwt_ppv=""}
+
   r_ppv=grep("^R\\..*\\.ppv$", colnames(data), value = TRUE)
   if(length(r_ppv)==0) {r_ppv=""}
-  
+
+  i_ppv=grep("^I\\..*\\.ppv$", colnames(data), value = TRUE)
+  if(length(i_ppv)==0) {i_ppv=""}
+
   if (nwt_ppv %in% colnames(data)) {
     # call pheno from NWT PPV (i.e. based on ecoff)
     data <- data %>% mutate(phenotype=if_else(get(nwt_ppv)>0.5, "NWT", "WT"))
-    if (r_ppv %in% colnames(data)) {
-      # call category using R & NWT PPV (update to include I PPV if available)
-      data <- data %>% 
-        mutate(category = case_when(get(r_ppv)>=0.8 ~ "R",
-                                    get(nwt_ppv)<=0.5 ~ "S",
-                                    get(nwt_ppv)>0.5 & (is.na(get(r_ppv)) | get(r_ppv)<0.8) ~ "I",
-                                    is.na(get(nwt_ppv)) & get(r_ppv)<=0.5 ~ "S",
-                                    is.na(get(nwt_ppv)) & get(r_ppv)>0.5 ~ "I",
-                                    TRUE ~ NA))
-      if (!is.null(mic_S) & !is.null(mic_R) & use_mic) { 
-        if (mic_S==mic_R) {# no I category for this drug
-          data <- data %>% mutate(category=if_else(category=="I", "R", category))
-        }
-      }
-      else if (!is.null(disk_S) & !is.null(disk_R) & use_disk) { # no I category for this drug
-        if (disk_S==disk_R) {# no I category for this drug
-          data <- data %>% mutate(if_else(category=="I", "R", category))
-        }
-      }
-    } else { # NWT PPV but no R PPV, infer category from NWT PPV only (ie based on ecoff)
-      data <- data %>% mutate(category = case_when(get(nwt_ppv)<=0.5 ~ "S",
-                                                           get(nwt_ppv)>0.5 ~ "R",
-                                                           is.na(get(nwt_ppv)) ~ NA,
-                                                           TRUE ~ NA))
-    }
-  } else if (r_ppv %in% colnames(data)) { 
-    # R PPV but no NWT PPV; call pheno from R PPV (update to I PPV if we have one)
+  } else if (i_ppv %in% colnames(data)) {
+    # I PPV but no NWT PPV; call pheno from I PPV
+    data <- data %>% mutate(phenotype=if_else(get(i_ppv)>0.5, "NWT", "WT"))
+  } else if (r_ppv %in% colnames(data)) {
+    # R PPV but no NWT PPV; call pheno from R PPV
     data <- data %>% mutate(phenotype=if_else(get(r_ppv)>0.5, "NWT", "WT"))
   }
-  
+
+  if (r_ppv %in% colnames(data)) {
+    # call category using R
+    data <- data %>% mutate(category = if_else(get(r_ppv)>0.5, "R", "S"))
+    if (i_ppv %in% colnames(data)) {
+      data <- data %>% mutate(category = if_else(get(i_ppv)>0.5 & get(r_ppv)<0.8, "I", category))
+    }
+  } else if (nwt_ppv %in% colnames(data)) { # NWT PPV but no R PPV, infer category from NWT PPV only (ie based on ecoff)
+    data <- data %>% mutate(category = case_when(get(nwt_ppv)<=0.5 ~ "S",
+                                                 get(nwt_ppv)>0.5 ~ "R",
+                                                 is.na(get(nwt_ppv)) ~ NA,
+                                                 TRUE ~ NA))
+  }
+
   # always return with category_suffix and phenotype_suffix columns added with notes
   pheno_colname <- paste0("phenotype",suffix)
   if ("phenotype" %in% colnames(data)) {
@@ -414,35 +429,71 @@ categorise_from_PPV <- function(data, suffix="", use_mic=F, mic_S=NULL, mic_R=NU
   if ("category" %in% colnames(data)) {
     data <- data %>% rename(!!category_colname := category)
   } else {data <- data %>% mutate(!!category_colname := NA)}
-  
+
   return(data)
 }
 
+#' Compare category calls and sample sizes for different sources of PPV (solo MIC+disk, extended solo, MIC, disk, logistic regression) and adjudicate a final call, recording evidence grade, limitations and notes for AMRrules. Helper function used by makerules().
+#'
+#' @param category_soloPPV Call from solo PPV based on combined interpretation of MIC+disk assay data.
+#' @param category_soloExtPPV Call from solo PPV based on all available SIR calls including those without raw assay data.
+#' @param category_micPPV Call from solo PPV based on MIC data.
+#' @param category_diskPPV Call from solo PPV based on disk data.
+#' @param category_logReg Call from multivariable logistic regression including all markers exceeding a minimum frequency, for samples with assay measures.
+#' @param category_logRegExt Call from multivariable logistic regression including all markers exceeding a minimum frequency, for all samples with SIR calls including those without raw assay data.
+#' @param R.solo.n Number of samples contributing to category_soloPPV call.
+#' @param R.soloExt.n Number of samples contributing to category_soloExtPPV call.
+#' @param MIC.n Number of samples contributing to category_micPPV call.
+#' @param Disk.n Number of samples contributing to category_diskPPV call.
+#' @param minObs Minimum number of samples to make a call.
+#' @param low_threshold Minimum number of observations required for `evidence grade` to be assigned as "moderate" rather than "low". Default is 20.
+#'
+#' @return A list of values
+#'
+#' @examples
+#' \dontrun{
+#' data <- data %>%
+#'   rowwise() %>%
+#'   mutate(results=list(compare_categories(category_soloPPV=category_soloPPV,
+#'              category_soloExtPPV=category_soloExtPPV,
+#'              category_micPPV=category_micPPV,
+#'              category_diskPPV=category_diskPPV,
+#'              category_logReg=category_logReg,
+#'              category_logRegExt=category_logRegExt,
+#'              R.solo.n=R.solo.n, R.soloExt.n=R.soloExt.n,
+#'              MIC.n=MIC.n, Disk.n=Disk.n))) %>%
+#'  ungroup() %>%
+#'  unnest_wider(results)
+#' }
+#'
+#' @export
+compare_categories <- function(category_soloPPV, category_soloExtPPV, category_micPPV,
+                               category_diskPPV, category_logReg, category_logRegExt,
+                               R.solo.n, R.soloExt.n, MIC.n, Disk.n,
+                               minObs=1, low_threshold=20) {
 
-compare_categories <- function(category_soloPPV, category_soloExtPPV, category_micPPV, category_diskPPV, category_logReg, category_logRegExt, R.solo.n, R.soloExt.n, MIC.n, Disk.n, minObs, low_threshold) {
-  
   category <- NA
   grade <- ""
   limitations <- list()
   note <- list()
   breakpoints_source <- list()
-  
+
   if (!is.na(category_soloPPV)) {
     category <- category_soloPPV
-    
-    if(R.solo.n < low_threshold) {
+
+    if (R.solo.n < low_threshold) {
       grade <- "low"
       limitations <- list("Limited samples.")
     }
     else {grade <- "moderate"}
-    
-    # ignore any missing category calls and record MIC or disk breakpoint if these measures contributed 
+
+    # ignore any missing category calls and record MIC or disk breakpoint if these measures contributed
     if (is.na(category_soloExtPPV)) {category_soloExtPPV <- category}
     if (is.na(category_micPPV)) {category_micPPV <- category
     } else if (category_micPPV==category_soloPPV) {breakpoints_source <- append(breakpoints_source, "mic")}
     if (is.na(category_diskPPV)) {category_diskPPV <- category
     } else if (category_diskPPV==category_soloPPV) {breakpoints_source <- append(breakpoints_source, "disk")}
-    
+
     if (category_soloPPV!=category_soloExtPPV) {
       if (R.solo.n<minObs & R.soloExt.n>=minObs) { # grade already set to low
         category <- category_soloExtPPV
@@ -453,20 +504,24 @@ compare_categories <- function(category_soloPPV, category_soloExtPPV, category_m
         note <- append(note, list("Call is based on solo PPV data from combined SIR from MIC/disk measures, but conflicts with extended data set including SIR calls without assay measurements."))
       }
     } else if (category_soloPPV!=category_micPPV) {
-      if (MIC.n>=minObs) {
-        limitations <- append(limitations, list("Conflicting evidence."))
-        note <- append(note, list("Call is based on solo PPV data based on combined SIR from MIC/disk measures, but conflicts with call from MIC measurements alone."))
+      if (!is.na(MIC.n)) {
+        if (MIC.n>=minObs) {
+          limitations <- append(limitations, list("Conflicting evidence."))
+          note <- append(note, list("Call is based on solo PPV data based on combined SIR from MIC/disk measures, but conflicts with call from MIC measurements alone."))
+        }
       }
     } else if (category_soloPPV!=category_diskPPV) {
-      if (Disk.n>=minObs) {
-        limitations <- append(limitations, list("Conflicting evidence."))
-        note <- append(note, list("Call is based on solo PPV data based on combined SIR from MIC/disk measures, but conflicts with call from disk measurements alone."))
+      if (!is.na(Disk.n)) {
+        if (Disk.n>=minObs) {
+          limitations <- append(limitations, list("Conflicting evidence."))
+          note <- append(note, list("Call is based on solo PPV data based on combined SIR from MIC/disk measures, but conflicts with call from disk measurements alone."))
+        }
       }
     }
   }
   else { # no solo PPV, should mean this is a combination (which only has MIC.ppv and/or Disk.ppv data) or marker/s found only in extended dataset without assay measures
     if (!is.na(category_micPPV) & !is.na(category_diskPPV)) {
-      if (category_micPPV==category_diskPPV) { 
+      if (category_micPPV==category_diskPPV) {
         category <- category_micPPV
         breakpoints_source <- append(breakpoints_source, "mic")
         breakpoints_source <- append(breakpoints_source, "disk")
@@ -519,21 +574,23 @@ compare_categories <- function(category_soloPPV, category_soloExtPPV, category_m
       grade <- "low"
       limitations <- append(limitations, list("No solo data."))
       note <- append(note, list("Call based only on negative result in multiple logistic regression, based on combined SIR from MIC/disk measures."))
+      breakpoints_source <- append(breakpoints_source, "logreg")
     } else if (!is.na(category_logRegExt)) {
       category <- category_logRegExt
       grade <- "low"
       limitations <- append(limitations, list("No solo data."))
       note <- append(note, list("Call based only on negative result in multiple logistic regression, using extended data set including SIR calls without assay measurements."))
+      breakpoints_source <- append(breakpoints_source, "logreg")
     }
   }
-  return(list(category=category, 
-              limitations_list=limitations, 
-              grade=grade, 
-              breakpoints_source=breakpoints_source, 
+  return(list(category=category,
+              limitations_list=limitations,
+              grade=grade,
+              breakpoints_source=breakpoints_source,
               note=note))
 }
 
-breakpoints <- function(breakpoint_mic, breakpoint_disk, bp_source_list) {
+breakpoints <- function(breakpoint_mic, breakpoint_disk, bp_source_list, mic.sources, disk.sources) {
   bp_list <- list()
   if ("mic" %in% bp_source_list) {
     bp_list <- append(bp_list, breakpoint_mic)
@@ -541,7 +598,103 @@ breakpoints <- function(breakpoint_mic, breakpoint_disk, bp_source_list) {
   if ("disk" %in% bp_source_list) {
     bp_list <- append(bp_list, breakpoint_disk)
   }
+  if ("logreg" %in% bp_source_list) {
+    if (mic.sources >0) {bp_list <- append(bp_list, breakpoint_mic)}
+    if (disk.sources >0) {bp_list <- append(bp_list, breakpoint_disk)}
+  }
   bp_string <- paste0(unlist(bp_list), collapse=", ")
   return(bp_string)
+}
+
+# check MICs expressed as ranges, how these are interpreted and if it impacts PPV estimates
+# plot MIC distributions for isolates with no resistance markers, stratified by platform/method to help check the impact of range values in different methods
+checkMICranges <- function(geno_table, pheno_table, antibiotic, drug_class_list, sir_col="pheno_eucast", ecoff_col="ecoff", minPPV=1, marker_col="marker.label", icat=TRUE, species, bp_site=NULL, excludeRanges="NWT") {
+
+  pheno_table_micdisk <- pheno_table %>% filter(!is.na(mic) | !is.na(disk))
+
+  soloPPV_micdisk <- safe_execute(AMRgen::solo_ppv_analysis(geno_table=geno_table, pheno_table=pheno_table_micdisk, antibiotic=antibiotic, drug_class_list=drug_class_list, sir_col=sir_col, ecoff_col=ecoff_col, min=minPPV, marker_col=marker_col, icat=icat, excludeRanges = NULL))
+
+  soloPPV_micdisk_norange <- safe_execute(AMRgen::solo_ppv_analysis(geno_table=geno_table, pheno_table=pheno_table_micdisk, antibiotic=antibiotic, drug_class_list=drug_class_list, sir_col=sir_col, ecoff_col=ecoff_col, min=minPPV, marker_col=marker_col, icat=icat, excludeRanges = c("NWT", "R", "I")))
+
+  compare_solo <- soloPPV_micdisk_norange$solo_stats %>% full_join(soloPPV_micdisk$solo_stats, by=c("marker", "category"), suffix=c("", ".ranges"))
+
+  compare_solo_plot <- compare_solo %>%
+    ggplot(aes(x=ppv, y=ppv.ranges, col=category)) +
+    geom_abline(intercept=0, slope=1, col="grey", linetype=2) +
+    geom_point() +
+    labs(x="Excluding MICs expressed as >x", y="Including all MIC values")
+
+  if (excludeRanges=="all") {
+    cat("Returning solo stats ignoring MICs expressed as ranges\n")
+    soloPPV_micdisk <- soloPPV_micdisk_norange # return analysis ignoring range values for R, I and NWT PPVs
+  } else if (excludeRanges=="NWT") { # redo analysis ignoring range values for NWT only
+    cat("Returning solo stats that ignore MICs expressed as ranges for NWT only (I/R stats still include range values)\n")
+    soloPPV_micdisk <- safe_execute(AMRgen::solo_ppv_analysis(geno_table=geno_table, pheno_table=pheno_table_micdisk, antibiotic=antibiotic, drug_class_list=drug_class_list,
+                                                              sir_col=sir_col, ecoff_col=ecoff_col, min=minPPV, marker_col=marker_col, icat=icat, excludeRanges = c("NWT")))
+
+  }
+
+  mic_interpretations_table <- pheno_table_micdisk %>% filter(drug_agent==as.ab(antibiotic) & !is.na(mic)) %>%
+    group_by(mic) %>% count() %>% ungroup() %>% mutate(drug_agent=as.ab(antibiotic))
+
+  mic_interpretations_table <- safe_execute(mic_interpretations_table %>%
+    mutate(across(where(is.mic), as.sir, ab=drug_agent, mo = as.mo("Escherichia coli"),
+                  capped_mic_handling="conservative", guideline = "EUCAST 2025", .names = "vs_breakpoints")))
+
+  mic_interpretations_table <- safe_execute(mic_interpretations_table %>%
+    mutate(across(where(is.mic), as.sir, ab=drug_agent, mo = as.mo("Escherichia coli"),
+                  capped_mic_handling="conservative", guideline = "EUCAST 2025", .names = "vs_ecoff", breakpoint_type = "ECOFF")))
+
+  marker_count <- soloPPV_micdisk$amr_binary %>% select(-any_of(c("id", "pheno", "ecoff", "mic", "disk", "R", "I", "NWT"))) %>% rowSums()
+  marker_count <- tibble(id=soloPPV_micdisk$amr_binary$id, marker_count=marker_count)
+
+  ecoff <- safe_execute(getBreakpoints(species=species, guide="EUCAST 2025", antibiotic=antibiotic, "ECOFF") %>% filter(method=="MIC") %>% pull(breakpoint_S))
+  mic_S <- safe_execute(unlist(checkBreakpoints(species=species, guide="EUCAST 2025", antibiotic=antibiotic, bp_site=bp_site, assay="MIC")[1]))
+  mic_R <- safe_execute(unlist(checkBreakpoints(species=species, guide="EUCAST 2025", antibiotic=antibiotic, bp_site=bp_site, assay="MIC")[2]))
+
+
+  mic_plot_by_method_dat <- marker_count %>% filter(marker_count==0) %>%
+    left_join(pheno_table_micdisk %>% filter(drug_agent==as.ab(antibiotic)), by="id") %>%
+    filter(!is.na(mic)) %>%
+    arrange(mic)
+
+  if (nrow(mic_plot_by_method_dat)>0) {
+    mic_plot_by_method <- mic_plot_by_method_dat %>%
+    mutate(range=if_else(grepl("<",mic), "range", "value")) %>%
+    ggplot(aes(y=factor(mic), fill=range)) +
+    geom_bar() +
+    labs(y="MIC", x="count", title=paste(antibiotic, "MIC distributions for samples with no markers identified"),
+         subtitle=paste("ECOFF:", ecoff, "S <=", mic_S, "R>", mic_R)) +
+    scale_fill_manual(values=c(range="maroon", value="navy", `NA`="grey"))
+
+    if (sum(!is.na(mic_plot_by_method_dat$method))>0) {
+      mic_plot_by_method <- mic_plot_by_method + facet_wrap(~method, nrow=1, scales="free_x")
+    }
+  } else {mic_plot_by_method <- NULL}
+
+  mic_plot_by_method_allgenomes_dat <-pheno_table_micdisk %>%
+    filter(drug_agent==as.ab(antibiotic)) %>%
+    filter(!is.na(mic)) %>%
+    arrange(mic)
+
+  if (nrow(mic_plot_by_method_allgenomes_dat)>0) {
+   mic_plot_by_method_allgenomes <- mic_plot_by_method_allgenomes_dat %>%
+    mutate(range=if_else(grepl("<",mic), "range", "value")) %>%
+    ggplot(aes(y=factor(mic), fill=range)) +
+    geom_bar() +
+    labs(y="MIC", x="count", title=paste(antibiotic, "MIC distributions for all samples"),
+         subtitle=paste("ECOFF:", ecoff, "S <=", mic_S, "R>", mic_R)) +
+    scale_fill_manual(values=c(range="maroon", value="navy", `NA`="grey"))
+   if (sum(!is.na(mic_plot_by_method_allgenomes_dat$method))>0) {
+     mic_plot_by_method_allgenomes <- mic_plot_by_method_allgenomes + facet_wrap(~method, nrow=1, scales="free_x")
+   }
+  } else {mic_plot_by_method_allgenomes <- NULL}
+
+  return(list(mic_plot_nomarkers=mic_plot_by_method,
+              mic_plot_all=mic_plot_by_method_allgenomes,
+              mic_table=mic_interpretations_table,
+              plot=compare_solo_plot,
+              table=compare_solo,
+              soloPPV_micdisk=soloPPV_micdisk))
 }
 

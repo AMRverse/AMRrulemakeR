@@ -21,6 +21,13 @@
 #' @param mafLogReg Minor allele frequency threshold for logistic regression inclusion (default: 5).
 #' @param mafUpset Minor allele frequency threshold for upset plot inclusion (default: 1).
 #' @param info Data frame indicating information about each sample, so we can summarise the source/s of data supporting each rule. First column should be sample id, matching that in the `pheno_table` object.
+#' @param use_mic Logical indicating whether to use MIC data in rule generation. Default is `TRUE`.
+#' @param mic_S The MIC breakpoint to define S (Optional, by default breakpoints are extracted using the AMR package, however if none are available or user wants to use a different one e.g. an ECOFF then it can be specified here).
+#' @param mic_R The MIC breakpoint to define R (Optional, by default breakpoints are extracted using the AMR package, however if none are available or user wants to use a different one e.g. an ECOFF then it can be specified here).
+#' @param use_disk Logical indicating whether to use disk diffusion data for rule generation. Default is `TRUE`.
+#' @param disk_S The disk breakpoint to define S (Optional, by default breakpoints are extracted using the AMR package, however if none are available or user wants to use a different one e.g. an ECOFF then it can be specified here).
+#' @param disk_R The disk breakpoint to define R (Optional, by default breakpoints are extracted using the AMR package, however if none are available or user wants to use a different one e.g. an ECOFF then it can be specified here).
+#' @param call_manual Logical indicating whether to interpret assay data manually against the provided S/R breakpoints, if they are provided. Otherwise we assume the input pheno_table object has interpreted phenotypes already (in column 'sir_col').
 #'
 #' @return A list containing:
 #' \item{reference_mic_plot}{EUCAST reference MIC distribution plot}
@@ -62,7 +69,11 @@
 amrrules_analysis <- function(geno_table, pheno_table, antibiotic, drug_class_list, species,
                                sir_col="pheno_eucast", ecoff_col="ecoff", sir_provided_col="pheno_provided",
                               geno_sample_col="Name", pheno_sample_col="id", marker_col="marker.label",
-                              minPPV=1, mafLogReg=5, mafUpset=1, info=NULL) {
+                              minPPV=1, mafLogReg=5, mafUpset=1, info=NULL, excludeRanges=TRUE, bp_site=NULL,
+                              mic_S=NULL, mic_R=NULL, disk_S=NULL, disk_R=NULL,
+                              use_mic=TRUE, use_disk=TRUE, call_manual=TRUE) {
+
+  cat(paste("Starting analysis for", ab_name(as.ab(antibiotic)),"\n"))
 
   # plot EUCAST reference distributions
   reference_mic <- safe_execute(AMRgen::get_eucast_mic_distribution(antibiotic, species))
@@ -73,17 +84,43 @@ amrrules_analysis <- function(geno_table, pheno_table, antibiotic, drug_class_li
   reference_disk <- safe_execute(rep(reference_disk$disk_diffusion, reference_disk$count))
   reference_disk_plot <- safe_execute(ggplot2::autoplot(reference_disk, ab = antibiotic, mo = species, title = "EUCAST reference disk zone distribtion"))
 
-  ### TO DO: plot MIC and disk distributions for input data, stratified by method
-
   ### TO DO: improve this
   #summary <- safe_execute(summarise_data(geno_table, pheno_table, antibiotic=antibiotic, drug_class_list=drug_class_list, geno_sample_col=geno_sample_col, pheno_sample_col=pheno_sample_col, species=species))
 
-
-  ### NEW: filter to pheno data with disk/MIC measures first
-
   cat("Running solo PPV analysis on samples with MIC or disk measures\n")
-  pheno_table_micdisk <- pheno_table %>% filter(!is.na(mic) | !is.na(disk))
-  soloPPV_micdisk <- safe_execute(AMRgen::solo_ppv_analysis(geno_table=geno_table, pheno_table=pheno_table_micdisk, antibiotic=antibiotic, drug_class_list=drug_class_list, sir_col=sir_col, ecoff_col=ecoff_col, min=minPPV, marker_col=marker_col))
+  pheno_table_micdisk <- pheno_table %>% filter(!is.na(mic) | !is.na(disk)) %>% filter(drug_agent==as.ab(antibiotic))
+
+  if (call_manual & !is.null(mic_S) & !is.null(mic_R) & sum(!is.na(pheno_table_micdisk$mic))>0) {
+    cat(" Manually calling SIR using provided MIC breakpoints\n")
+    pheno_table_micdisk_mic <- pheno_table_micdisk %>% filter(!is.na(mic)) %>%
+                                mutate(!!sym(sir_col):=case_when(!grepl(">",mic) & as.numeric(sub("<","",(sub("=","",mic))))<=mic_S ~ "S",
+                                                           !grepl("<",mic) & as.numeric(sub(">","",(sub("=","",mic))))>mic_R ~ "R",
+                                                           !grepl(">",mic) & as.numeric(sub("<","",(sub("=","",mic))))>mic_S ~ "I",
+                                                           !is.na(mic) ~ "NI",
+                                                           TRUE ~ NA
+                                )) %>% mutate(!!sym(sir_col):=as.sir(get(sir_col)))
+    pheno_table_micdisk_disk <- pheno_table_micdisk %>% filter(!is.na(disk))
+    pheno_table_micdisk <- bind_rows(pheno_table_micdisk_mic, pheno_table_micdisk_disk)
+  }
+
+  if (call_manual & !is.null(disk_S) & !is.null(disk_R) & sum(!is.na(pheno_table_micdisk$mic))>0) {
+    cat(" Manually calling SIR using provided disk breakpoints\n")
+    pheno_table_micdisk_disk <- pheno_table_micdisk %>% filter(!is.na(disk)) %>%
+                                  mutate(!!sym(sir_col):=case_when(!grepl("<",disk) & as.numeric(sub(">","",(sub("=","",mic))))>=disk_S ~ "S",
+                                                                   !grepl(">",disk) & as.numeric(sub("<","",(sub("=","",mic))))<disk_R ~ "R",
+                                                                   !grepl("<",disk) & as.numeric(sub(">","",(sub("=","",mic))))<disk_S ~ "I",
+                                                                    !is.na(mic) ~ "NI",
+                                                                    TRUE ~ NA
+                              )) %>% mutate(!!sym(sir_col):=as.sir(get(sir_col)))
+    pheno_table_micdisk_mic <- pheno_table_micdisk %>% filter(!is.na(mic))
+    pheno_table_micdisk <- bind_rows(pheno_table_micdisk_mic, pheno_table_micdisk_disk)
+  }
+
+  #soloPPV_micdisk <- safe_execute(AMRgen::solo_ppv_analysis(geno_table=geno_table, pheno_table=pheno_table_micdisk, antibiotic=antibiotic, drug_class_list=drug_class_list, sir_col=sir_col, ecoff_col=ecoff_col, min=minPPV, marker_col=marker_col, icat=TRUE))
+  check_solo <- checkMICranges(geno_table, pheno_table_micdisk, antibiotic=antibiotic, drug_class_list=drug_class_list,
+                               species=species, bp_site=bp_site, excludeRanges="NWT", marker_col=marker_col,
+                               sir_col=sir_col, ecoff_col=ecoff_col, min=minPPV)
+  soloPPV_micdisk <- check_solo$soloPPV_micdisk
 
   cat("Running logistic regression on samples with MIC or disk measures\n")
   logistic_micdisk <- safe_execute(AMRgen::amr_logistic(geno_table=geno_table, pheno_table=pheno_table_micdisk, antibiotic=antibiotic, drug_class_list=drug_class_list, sir_col=sir_col, ecoff_col=ecoff_col, maf=mafLogReg, geno_sample_col=geno_sample_col, pheno_sample_col=pheno_sample_col, marker_col=marker_col))
@@ -119,15 +156,17 @@ amrrules_analysis <- function(geno_table, pheno_table, antibiotic, drug_class_li
     bind_rows(pheno_table_micdisk %>% rename(pheno=!!sir_col) %>% rename(ecoff=!!ecoff_col))
 
     cat("Running solo PPV analysis on all samples, including those with SIR calls only\n")
-    soloPPV_sir <- safe_execute(AMRgen::solo_ppv_analysis(geno_table=geno_table, pheno_table=pheno_table_sir, antibiotic=antibiotic, drug_class_list=drug_class_list, sir_col="pheno", ecoff_col="ecoff", min=minPPV, marker_col=marker_col))
+    soloPPV_sir <- safe_execute(AMRgen::solo_ppv_analysis(geno_table=geno_table, pheno_table=pheno_table_sir, antibiotic=antibiotic, drug_class_list=drug_class_list, sir_col="pheno", ecoff_col="ecoff", min=minPPV, marker_col=marker_col, icat=TRUE))
 
     cat("Running logistic regression on all samples, including those with SIR calls only\n")
     logistic_sir <- safe_execute(AMRgen::amr_logistic(geno_table=geno_table, pheno_table=pheno_table_sir, antibiotic=antibiotic, drug_class_list=drug_class_list, sir_col="pheno", ecoff_col="ecoff", maf=mafLogReg, geno_sample_col=geno_sample_col, pheno_sample_col=pheno_sample_col, marker_col=marker_col))
 
     cat("Combining PPV and regression stats for all samples\n")
     # combined PPV/logistic plot for samples with MIC or disk measures
-    ppv_logistic_plot_sir <- safe_execute(soloPPV_sir$combined_plot + logistic_sir$plot + scale_y_discrete(limits = names(soloPPV_sir$plot_order)) + labs(y="") +
+    if (!is.null(logistic_sir$plot)) {
+      ppv_logistic_plot_sir <- safe_execute(soloPPV_sir$combined_plot + logistic_sir$plot + scale_y_discrete(limits = names(soloPPV_sir$plot_order)) + labs(y="") +
                                               theme(legend.position="none") + ggtitle("Logistic regression"))
+    } else {ppv_logistic_plot_sir <- safe_execute(soloPPV_sir$combined_plot)}
   }
 
   cat("Extracting gene info\n")
@@ -159,6 +198,8 @@ amrrules_analysis <- function(geno_table, pheno_table, antibiotic, drug_class_li
 
   return(list(reference_mic_plot=reference_mic_plot,
               reference_disk_plot=reference_disk_plot,
+              reference_mic=reference_mic,
+              reference_disk=reference_disk,
               solo_stats=soloPPV_micdisk$solo_stats,
               solo_binary=soloPPV_micdisk$solo_binary,
               amr_binary=soloPPV_micdisk$amr_binary,
@@ -181,10 +222,17 @@ amrrules_analysis <- function(geno_table, pheno_table, antibiotic, drug_class_li
               ppv_logistic_plot_all=ppv_logistic_plot_sir,
               modelR_all=logistic_sir$modelR,
               modelNWT_all=logistic_sir$modelNWT,
+              mic_plot_nomarkers=check_solo$mic_plot_nomarkers,
+              mic_plot_all=check_solo$mic_plot_all,
+              mic_table=check_solo$mic_table,
+              compare_solo_plot=check_solo$plot,
+              compare_solo_table=check_solo$table,
               afp_hits=afp_hits,
               species=species,
               antibiotic=antibiotic,
-              info=info))
+              drug_class_list=drug_class_list,
+              bp_site=bp_site,
+              info=info, pheno_table_micdisk=pheno_table_micdisk))
 }
 
 #' Save AMR Geno-Pheno Analysis Results and Plots to Files and Draft AMRrules
@@ -236,7 +284,8 @@ amrrules_analysis <- function(geno_table, pheno_table, antibiotic, drug_class_li
 amrrules_save <- function(amrrules, width=9, height=9, dir_path, outdir_name=NULL, file_prefix=NULL,
                           minObs=3, low_threshold=20, bp_site=NULL, ruleID_start=1000,
                           mic_S=NULL, mic_R=NULL, disk_S=NULL, disk_R=NULL,
-                          use_mic=TRUE, use_disk=TRUE, guide="EUCAST 2025", makeRules=TRUE) {
+                          use_mic=TRUE, use_disk=TRUE, guide="EUCAST 2025",
+                          makeRules=TRUE, testRules=TRUE, geno_table=NULL, pheno_table=NULL) {
 
   if (is.null(outdir_name)) { outdir_name <- gsub("/","_",amrrules$antibiotic) }
   if (is.null(file_prefix)) { file_prefix <- gsub("/","_",amrrules$antibiotic) }
@@ -260,10 +309,17 @@ amrrules_save <- function(amrrules, width=9, height=9, dir_path, outdir_name=NUL
   if (!is.null(amrrules$upset_mic_plot)) {safe_execute(ggsave(amrrules$upset_mic_plot, filename=paste0(outpath,"_MIC_upset_plot.pdf"), width=width*1.5, height=height))}
   if (!is.null(amrrules$upset_disk_plot)) {safe_execute(ggsave(amrrules$upset_disk_plot, filename=paste0(outpath,"_disk_upset_plot.pdf"), width=width*1.5, height=height))}
 
+  if (!is.null(amrrules$mic_plot_nomarkers)) {safe_execute(ggsave(amrrules$mic_plot_nomarkers, filename=paste0(outpath,"_mic_dist_method_nomarkers.pdf"), width=width, height=height))}
+  if (!is.null(amrrules$mic_plot_all)) {safe_execute(ggsave(amrrules$mic_plot_all, filename=paste0(outpath,"_mic_dist_method_all.pdf"), width=width, height=height))}
+  if (!is.null(amrrules$compare_solo_plot)) {safe_execute(ggsave(amrrules$compare_solo_plot, filename=paste0(outpath,"_compare_ranges_solo_plot.pdf"), width=width, height=height))}
+
+
   #safe_execute(readr::write_tsv(as.data.frame(amrrules$summary), col_names=F, file=paste0(outpath,"_data_summary.tsv")))
   safe_execute(readr::write_tsv(amrrules$modelR, file=paste0(outpath,"_model_R.tsv")))
   safe_execute(readr::write_tsv(amrrules$modelNWT, file=paste0(outpath,"_model_NWT.tsv")))
   safe_execute(readr::write_tsv(amrrules$solo_stats, file=paste0(outpath,"_soloPPV.tsv")))
+  safe_execute(readr::write_tsv(amrrules$mic_table, file=paste0(outpath,"_MIC_values_table.tsv")))
+  safe_execute(readr::write_tsv(amrrules$compare_solo_table, file=paste0(outpath,"_soloPPV_compareWithoutRanges.tsv")))
 
   if (!is.null(amrrules$upset_mic_summary)) {safe_execute(readr::write_tsv(amrrules$upset_mic_summary, file=paste0(outpath,"_MIC_summary.tsv")))}
   else {cat ("  (No MIC data summary available to write)\n")}
@@ -289,36 +345,143 @@ amrrules_save <- function(amrrules, width=9, height=9, dir_path, outdir_name=NUL
       safe_execute(readr::write_tsv(rules$data, file=paste0(outpath,"_AMRrules_data.tsv")))
       cat(paste0("\nWriting rules to ",outpath,"_AMRrules.tsv\n"))
 
-      cat ("  Comparing primary calls (solo PPV from MIC/disk data) with other evidence\n")
+      cat (" Comparing primary calls (solo PPV from MIC/disk data) with other evidence\n")
       rule_compare_R <- safe_execute(compareRulesData(rules$data, antibiotic=amrrules$antibiotic, drug_class_list=amrrules$drug_class_list, type="R"))
+      rule_compare_I <- safe_execute(compareRulesData(rules$data, antibiotic=amrrules$antibiotic, drug_class_list=amrrules$drug_class_list, type="I"))
       rule_compare_NWT <- safe_execute(compareRulesData(rules$data, antibiotic=amrrules$antibiotic, drug_class_list=amrrules$drug_class_list, type="NWT"))
 
       if (!is.null(rule_compare_R$plot)) {safe_execute(ggsave(rule_compare_R$plot, filename=paste0(outpath,"_soloPPV_R_vsOther.pdf"), width=width, height=height/2))}
+      if (!is.null(rule_compare_I$plot)) {safe_execute(ggsave(rule_compare_I$plot, filename=paste0(outpath,"_soloPPV_I_vsOther.pdf"), width=width, height=height/2))}
       if (!is.null(rule_compare_NWT$plot)) {safe_execute(ggsave(rule_compare_NWT$plot, filename=paste0(outpath,"_soloPPV_NWT_vsOther.pdf"), width=width, height=height/2))}
       safe_execute(readr::write_tsv(rule_compare_R$diffs, file=paste0(outpath,"_soloPPV_R_mismatchCalls.tsv")))
+      safe_execute(readr::write_tsv(rule_compare_I$diffs, file=paste0(outpath,"_soloPPV_I_mismatchCalls.tsv")))
       safe_execute(readr::write_tsv(rule_compare_NWT$diffs, file=paste0(outpath,"_soloPPV_NWT_mismatchCalls.tsv")))
+
+      if (testRules & !is.null(geno_table)) {
+        cat (" Predicting phenotypes by applying rules to interpret genotypes (can take a few minutes)\n")
+        test_vs_rules <- test_rules_amrfp(geno_table %>% filter(drug_class %in% amrrules$drug_class_list), rules$rules, amrrules$species)
+        safe_execute(readr::write_tsv(test_vs_rules, file=paste0(outpath,"_predictionsFromRules.tsv")))
+
+        cat (" Comparing phenotypes predicted from rules vs observed phenotypes\n")
+        true_pheno <- safe_execute(amrrules$amr_binary %>% filter(!is.na(pheno)) %>% select(any_of(c("id", "pheno", "ecoff", "mic", "disk"))))
+        true_vs_predict <- safe_execute(left_join(test_vs_rules, true_pheno, join_by("Name"=="id")) %>% filter(!grepl("<",mic)))
+
+        sircall_compare_prop <- true_vs_predict %>% count(pheno, category) %>% group_by(pheno) %>% mutate(pct= prop.table(n) * 100)
+        sircall_compare_prop_plot <- sircall_compare_prop %>% ggplot(aes(x=pheno, fill=category, y=n)) + geom_col(position="fill") + scale_fill_sir() + coord_flip() +
+          labs(x="Assayed Phenotype", fill="Predicted category (AMRrules)", y="proportion") +
+          geom_text(aes(label=paste0(sprintf("%1.1f", pct),"%")), position=position_fill(vjust=0.5))
+        sircall_compare_n <- true_vs_predict %>% count(pheno, category) %>%
+          ggplot(aes(x=pheno, fill=category, y=n)) + geom_col() + scale_fill_sir() + coord_flip() +
+          labs(x="Assayed Phenotype", fill="Predicted category (AMRrules)", y="n")
+        test_sir_plot <- sircall_compare_n + sircall_compare_prop_plot + plot_layout(guides="collect", axes="collect")
+
+        safe_execute(readr::write_tsv(sircall_compare_prop, file=paste0(outpath,"_predictionsVsCategory_summary.tsv")))
+        if (!is.null(test_sir_plot)) {safe_execute(ggsave(test_sir_plot, filename=paste0(outpath,"_predictionsVsCategory.pdf"), width=width, height=height/2))}
+
+        ecoff_compare_prop <- true_vs_predict %>% count(phenotype, ecoff) %>% group_by(ecoff) %>% mutate(pct= prop.table(n) * 100)
+        ecoff_compare_prop_plot <- ecoff_compare_prop %>% ggplot(aes(x=ecoff, fill=phenotype, y=n)) + geom_col(position="fill")  + coord_flip() +
+          labs(x="Assay vs ECOFF", fill="Predicted category (AMRrules)", y="proportion") +
+          geom_text(aes(label=paste0(sprintf("%1.1f", pct),"%")), position=position_fill(vjust=0.5)) +
+          scale_fill_manual(values=c(wildtype="#3CAEA3", nonwildtype="#ED553B", `NA`="grey"))
+        ecoff_compare_n <- true_vs_predict %>% count(phenotype, ecoff) %>%
+          ggplot(aes(x=ecoff, fill=phenotype, y=n)) + geom_col()  + coord_flip() +
+          labs(x="Assay vs ECOFF", fill="Predicted category (AMRrules)", y="n") +
+          scale_fill_manual(values=c(wildtype="#3CAEA3", nonwildtype="#ED553B", `NA`="grey"))
+        test_ecoff_plot <- ecoff_compare_n + ecoff_compare_prop_plot + plot_layout(guides="collect", axes="collect")
+
+        safe_execute(readr::write_tsv(ecoff_compare_prop, file=paste0(outpath,"_predictionsVsPhenotype_summary.tsv")))
+        if (!is.null(test_ecoff_plot)) {safe_execute(ggsave(test_ecoff_plot, filename=paste0(outpath,"_predictionsVsPhenotype.pdf"), width=width, height=height/2))}
+
+
+        if (!is.null(pheno_table) & "method" %in% colnames(pheno_table) & sum(!is.na(true_vs_predict$mic))>0) {
+          cat (" Plotting phenotype prediction vs MIC method\n")
+          true_vs_predict <- true_vs_predict %>%
+            filter(!is.na(mic) | !is.na(disk)) %>%
+            left_join(pheno_table %>% filter(drug_agent==as.ab(amrrules$antibiotic)) %>% select(id, method), join_by("Name"=="id"))
+
+          sir_by_method <- true_vs_predict %>% count(category, pheno, method) %>% group_by(category, method) %>% mutate(pct= prop.table(n) * 100)
+          sir_by_method_plot <- sir_by_method %>% ggplot(aes(x=method, y=n, fill=pheno)) + geom_col(position="fill") + facet_wrap(~category) + coord_flip() +
+            geom_text(aes(label=paste0(sprintf("%1.1f", pct),"%")), position=position_fill(vjust=0.5)) + scale_fill_sir()
+
+          nwt_by_method <- true_vs_predict %>% count(phenotype, ecoff, method) %>% group_by(phenotype, method) %>% mutate(pct= prop.table(n) * 100)
+          nwt_by_method_plot <- nwt_by_method %>% ggplot(aes(x=method, y=n, fill=ecoff)) + geom_col(position="fill") + facet_wrap(~phenotype) + coord_flip() +
+            geom_text(aes(label=paste0(sprintf("%1.1f", pct),"%")), position=position_fill(vjust=0.5))
+
+          mic_dist_vs_predictSIR <- true_vs_predict %>% count(category, mic, method) %>%
+            ggplot(aes(x=factor(mic), y=n, fill=category)) + geom_col() + facet_wrap(~method, ncol=1, scales="free_y") +
+            labs(x="MIC", fill="Prediction", title=paste(amrrules$antibiotic, "MIC distribution by method"),
+                 subtitle="coloured by prediction from genotypes using draft rules") + scale_fill_sir()
+
+          mic_dist_vs_predictNWT <- true_vs_predict %>% count(phenotype, mic, method) %>%
+            ggplot(aes(x=factor(mic), y=n, fill=phenotype)) + geom_col() + facet_wrap(~method, ncol=1, scales="free_y") +
+            labs(x="MIC", fill="Prediction", title=paste(amrrules$antibiotic, "MIC distribution by method"),
+                 subtitle="coloured by prediction from genotypes using draft rules") +
+            scale_fill_manual(values=c(wildtype="#3CAEA3", nonwildtype="#ED553B", `NA`="grey"))
+
+          if (!is.null(sir_by_method_plot)) {safe_execute(ggsave(sir_by_method_plot, filename=paste0(outpath,"_SIRpredictionsByMethod.pdf"), width=width, height=height/2))}
+          if (!is.null(nwt_by_method_plot)) {safe_execute(ggsave(nwt_by_method_plot, filename=paste0(outpath,"_NWTpredictionsVsPhenotype.pdf"), width=width, height=height/2))}
+          if (!is.null(mic_dist_vs_predictSIR)) {safe_execute(ggsave(mic_dist_vs_predictSIR, filename=paste0(outpath,"_SIRpredictionsVsMICbyMethod.pdf"), width=width, height=height/2))}
+          if (!is.null(mic_dist_vs_predictNWT)) {safe_execute(ggsave(mic_dist_vs_predictNWT, filename=paste0(outpath,"_NWTpredictionsVsMICbyMethod.pdf"), width=width, height=height/2))}
+        }
+        else {
+          sir_by_method_plot <- NULL
+          nwt_by_method_plot <- NULL
+          mic_dist_vs_predictSIR <- NULL
+          mic_dist_vs_predictNWT <- NULL
+        }
+        safe_execute(readr::write_tsv(true_vs_predict, file=paste0(outpath,"_predictionsVsPhenotypeByMethod.tsv")))
+      } else {
+        cat ("  Not predicting phenotypes by applying rules to interpret genotypes")
+        if (testRules & is.null(geno_table)) {cat(" (testRules=TRUE but no geno_table provided)")}
+        else if (!testRules) {cat(" (testRules=FALSE)")}
+        cat("\n")
+        test_vs_rules <- NULL
+        sircall_compare_prop <- NULL
+        test_sir_plot <- NULL
+        ecoff_compare_prop <- NULL
+        test_ecoff_plot <- NULL
+        true_vs_predict <- NULL
+        sir_by_method_plot <- NULL
+        nwt_by_method_plot <- NULL
+        mic_dist_vs_predictSIR <- NULL
+        mic_dist_vs_predictNWT <- NULL
+      }
     }
     else{cat("Failed to make rules\n\n")}
   }
   else {
     cat("Not making rules (rerun with makeRules=TRUE to generate rules)\n")
-    rules <- NULL}
+    rules <- NULL
+    test_vs_rules <- NULL
+    true_vs_predict <- NULL
+    sircall_compare_prop <- NULL
+    test_sir_plot <- NULL
+    ecoff_compare_prop <- NULL
+    test_ecoff_plot <- NULL
+    sir_by_method_plot <- NULL
+    nwt_by_method_plot <- NULL
+    mic_dist_vs_predictSIR <- NULL
+    mic_dist_vs_predictNWT <- NULL
+  }
 
   cat ("\n")
 
-  return(rules)
+  return(list(rules=rules$rules, data=rules$data, predictions=test_vs_rules, predict_vs_obs=true_vs_predict,
+              SIR_prediction_stats=sircall_compare_prop, SIR_prediction_plot=test_sir_plot,
+              NWT_prediction_stats=ecoff_compare_prop, NWT_prediction_plot=test_ecoff_plot,
+              SIR_by_method_plot=sir_by_method_plot, NWT_by_method_plot=nwt_by_method_plot,
+              mic_dist_vs_predictSIR=mic_dist_vs_predictSIR, mic_dist_vs_predictNWT=mic_dist_vs_predictNWT))
 }
 
 compareRulesData <- function(rules_dat, antibiotic, drug_class_list, type="R") {
-
-  if (type=="R") {exclude<-"NWT"}
-  else if (type=="NWT") {exclude<-"R"}
+  exclude<-c("R", "I", "NWT")
+  exclude<-exclude[exclude!=type]
 
   # compare using rules data
   compare_r_ppv <- rules_dat %>%
     select(marker, ends_with("ppv")) %>%
     select(marker, starts_with(type)) %>%
-    pivot_longer(cols=-marker)
+    pivot_longer(cols=-marker, values_drop_na=TRUE)
 
   solo_ppv_colname=paste0(type,".solo.ppv")
   solo_ppv_sym <- sym(solo_ppv_colname)
@@ -338,15 +501,15 @@ compareRulesData <- function(rules_dat, antibiotic, drug_class_list, type="R") {
     select(marker, ends_with(".n")) %>%
     select(-starts_with(exclude))
 
-  if (mic_colname %in% colnames(compare_r_n)){
+  if ("MIC.n" %in% colnames(compare_r_n)){
     compare_r_n <- compare_r_n %>% rename(!!mic_colname:=MIC.n)
   }
-  if (disk_colname %in% colnames(compare_r_n)) {
+  if ("Disk.n" %in% colnames(compare_r_n)) {
     compare_r_n <- compare_r_n %>% rename(!!disk_colname:=Disk.n)
   }
 
   compare_r_n <- compare_r_n %>%
-    pivot_longer(cols=-marker)
+    pivot_longer(cols=-marker, values_drop_na=TRUE)
 
   plot <- ggplot(data=compare_r_ppv, aes(x=.data[[solo_ppv_colname]],
                                          y=value, col=match)) +
