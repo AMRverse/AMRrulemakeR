@@ -113,3 +113,89 @@ The key fields needed are:
 * A column indicating the MIC assay method used to generate the measurement (e.g. microbroth dilution, Vitek, Sensititre, BD Phoenix, etc)
     * If using `import_ast()`, this is taken from the 'Laboratory typing platform' field (importing from NCBI format) or 'phenotype-platform' field (importing from EBI format)
 
+### Examples
+
+```
+# download NCBI data from https://www.ncbi.nlm.nih.gov/pathogens/ast#taxgroup_name:%22E.coli%20and%20Shigella%22
+# import data from file
+ncbi_ast <-import_ncbi_ast("NCBI_AST_EcoliShigella.tsv.gz")
+
+# download EBI data from https://www.ebi.ac.uk/amr/data/?view=experiments
+# import data from file
+ebi_ast <- import_ebi_ast("EBI_CABBAGE_EcoliShigella.csv.gz")
+
+# import study data and format it
+study1_ast <- read_tsv("AST.txt") %>%
+   rename(id="Strain name") %>%
+   mutate(mic = paste0(`Measurement sign`, `MIC (mg/L)`)) %>% # combine measurement sign with MIC value into single column
+   mutate(mic = gsub("==", "", mic)) %>%
+   mutate(mic = as.mic(mic)) %>% # format MIC values to class 'mic'
+   mutate(drug_agent = as.ab(Antibiotic)) %>% # format drug name to class 'ab'
+   mutate(spp_pheno = as.mo(`Species name`)) %>% # format organism name to class 'mo' (optional unless you have data from multiple organisms in the same dataframe)
+   mutate(method="Sensititre") %>%
+   mutate(source="Study1")
+
+# interpret MIC data using EUCAST breakpoints and ECOFFs
+study1_ast <- interpret_ast(study1_ast, interpret_ecoff = TRUE, interpret_eucast = TRUE, interpret_clsi = FALSE, species = species, ab = ab)
+```
+
+## Collate and format AMRfinderplus genotype data
+For use with the AMRrulemakeR package, you need to process the AMRfinderplus data using `import_afp()`, which generates consistent marker labels that will be the units of analysis, and which can ultimately be represented in the AMRrules variant specification format.
+
+Example data frame included in the AMRgen package:
+
+```
+ecoli_geno <- import_amrfp(ecoli_geno_raw, "Name")
+
+ecoli_geno
+
+# A tibble: 50,720 × 36
+   Name         gene        mutation  node      `variation type` marker marker.label drug_agent drug_class
+   <chr>        <chr>       <chr>     <chr>     <chr>            <chr>  <chr>        <ab>       <chr>     
+ 1 SAMN03177615 blaEC       NA        blaEC     Gene presence d… blaEC  blaEC        NA         Beta-lact…
+ 2 SAMN03177615 acrF        NA        acrF      Gene presence d… acrF   acrF         NA         Efflux    
+ 3 SAMN03177615 glpT        Glu448Lys glpT      Protein variant… glpT_… glpT:Glu448… FOS        Other ant…
+ 4 SAMN03177615 floR        NA        floR      Gene presence d… floR   floR         CHL        Amphenico…
+ 5 SAMN03177615 floR        NA        floR      Gene presence d… floR   floR         FLR        Other ant…
+ 6 SAMN03177615 mdtM        NA        mdtM      Gene presence d… mdtM   mdtM         NA         Efflux    
+ 7 SAMN03177615 blaTEM-1    NA        blaTEM-1  Gene presence d… blaTE… blaTEM-1     NA         Beta-lact…
+ 8 SAMN03177615 sul2        NA        sul2      Gene presence d… sul2   sul2         SSS        Other ant…
+ 9 SAMN03177615 aph(3'')-Ib NA        aph(3'')… Gene presence d… aph(3… aph(3'')-Ib  STR1       Aminoglyc…
+10 SAMN03177615 aph(6)-Id   NA        aph(6)-Id Gene presence d… aph(6… aph(6)-Id    STR1       Aminoglyc…
+
+```
+
+The key fields needed are:
+* `Name` - Sample name, must match that in the corresponding phenotype file.
+    * If using Allthebacteria genotype files this will be the biosample, facilitating matches to public phenotype data.
+* `gene`, `mutation`, `variation type` - Variant specification fields in AMRrules format, inferred from the `Gene symbol` and `Method` fields
+* `node` - NCBI reference gene hierarchy node ID corresponding to this hit, taken from `Hierarchy node` if available (otherwise copied from gene)
+* `marker` - Original content of `Gene symbol` field, ie matching the entry in NCBI refgene
+* `drug_agent` - Specific drug to which this marker applies (if an individual drug is named in the `Subclass` fields)
+* `drug_class` - Drug class to which this marker applies, mapped to classes in AMR package (taken from `Class` and `Subclass` fields)
+
+Notes: 
+1. Currently the AMR package lacks some key classes of relevance to us, e.g. Fosfomycin. These will be added in future.
+2. Currently the AMRrulemakeR package functions extract markers by drug_class, but we should consider updating to exclude for markers that are associated with a different drug of the same class. Or perhaps test with these included vs excluded, as the specificity of drug assignments in NCBI may be imperfect.
+
+### Examples
+
+```
+# process AMRfp genotype data from Allthebacteria
+
+# import AMRfp results file for E. coli
+afp <-read_tsv("ATB_AFP_Ecoli_AMR.tsv.gz")
+
+# read species calls so we can ensure only those confirmed as the target species will be included
+species_calls <- read_tsv("ATB_species_calls.tsv.gz")
+ecoli <- species_calls %>% filter(Species=="Escherichia coli") %>% pull(Sample) # list of confirmed E. coli
+
+# read AMRfp run status for E. coli genomes
+afp_status <- read_tsv("genotypes/ATB_AMRFP_status.tsv.gz") %>% filter(sample %in% ecoli)
+
+# AMRfp results including null row for each genome that ran but returned no hits
+afp_all <- afp_status %>% rename(Name=sample) %>% left_join(afp) %>% filter(status=="PASS")
+
+# include only those genomes that we have ast data for in our `ast` object
+afp_matching <- afp_all %>% filter(Name %in% ast$id)
+```
