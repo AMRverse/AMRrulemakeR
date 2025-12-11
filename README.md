@@ -69,3 +69,18 @@ cip_rules <- makerules(cip_analysis, bp_site="Non-meningitis", use_disk=F, guide
 view(cip_rules$rules)
 
 ```
+
+# Work in progress - suggested protocol for developing AMRrules using this package
+
+## Collate and format phenotype data
+For use with the AMRgen & AMRrulemakeR packages, you need to get the AST data into long format (one row per sample/drug result), with some key fields.
+Data in NCBI or EBI antibiogram format can be automatically imported to the right dataframe using the `import_ast()` in the AMRgen package.
+Or you can format your data manually. 
+
+The key fields needed are:
+* `id` - Sample name, must match that in the corresponding genotype file. Best to use INSDC BioSample where available.
+* `drug_agent` - Name of the antibiotic, formatted as class 'ab' (using `as.ab()`)
+* `mic` - MIC assay measurement (where available), formated as class 'mic' (using `as.mic()`). Note that if your input file has MIC value in one column, and sign (e.g. >, <, <=, etc) in another column (e.g. the NCBI antibiogram format), you will need to paste those two columns together first before applying `as.mic()`.
+* `disk` - Disk assay measurement (where available), formated as class 'disk' (using `as.disk()`).
+* 
+
