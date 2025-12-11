@@ -199,3 +199,34 @@ afp_all <- afp_status %>% rename(Name=sample) %>% left_join(afp) %>% filter(stat
 # include only those genomes that we have ast data for in our `ast` object
 afp_matching <- afp_all %>% filter(Name %in% ast$id)
 ```
+
+## Run analyses need to define rules
+The function `amrrules_analysis()` takes our phenotype table and extracts the data for a specified drug; then takes our genotype table and extracts the data for the relevant markers; and compares these geno/pheno data using several different `AMRgen` functions.
+
+
+Example command
+```
+# extract the information fields we want to consider (source, method)
+info_obj <- ast %>% select(id, source, method)
+
+# run the required geno/pheno analyses
+analysis <- amrrules_analysis(geno_table=afp, pheno_table=ast,
+                              antibiotic="Ciprofloxacin",
+                              drug_class_list=c("Quinolones"),
+                              species="Escherichia coli",
+                              sir_col="pheno_eucast", ecoff_col="ecoff", 
+                              minPPV=1, mafLogReg=5, mafUpset=1,
+                              info=info_obj)
+
+# use the results of these analyses to define rules, then apply the rules back to the data to predict phenotypes
+rules <- amrrules_save(analysis, dir_path="amrrules", 
+                         ruleID_start=1,
+                         use_mic=TRUE, use_disk=TRUE,
+                         geno_table=afp, pheno_table=ast,
+                         file_prefix=file_prefix)
+```
+
+Notes:
+1. Currently we use the supplied pheno_table to get the assay method to plot predictions vs method, but we could do this from the info_obj.
+2. Add examples with multiple entries in drug_class_list (e.g. trim-sulfa, beta-lactams)
+3. Add examples with manually supplied breakpoints (e.g. using azithromycin ECOFF as breakpoint)
