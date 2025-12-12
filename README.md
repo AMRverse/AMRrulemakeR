@@ -203,6 +203,8 @@ afp_matching <- afp_all %>% filter(Name %in% ast$id)
 ## Run analyses need to define rules
 The function `amrrules_analysis()` takes our phenotype table and extracts the data for a specified drug; then takes our genotype table and extracts the data for the relevant markers; and compares these geno/pheno data using several different `AMRgen` functions.
 
+The function `amrrules_save()` takes these analysis results, and saves key tables and figures. It then uses these results to define rules in AMRrules format via the `makerules()` function, and writes these to an output TSV file. Finally, the rules are applied to the input genotypes to predict S/I/R and wildtype/nonwildtype for each sample using the `test_rules_amrfp()` function, and these results are compared to the input phenotypes and summarised in terms of positive predictive value (including stratified by assay method) to help assess the validity of the rules.
+
 
 Example command
 ```
