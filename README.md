@@ -53,7 +53,7 @@ ecoli_ast_ebi
 ecoli_afp_atb
 
 # run quantitative analyses for ciprofloxacin phenotypes vs quinolone marker genotypes, using the S/I/R calls made against EUCAST breakpoints
-cip_analysis <- amrrules_analysis(ecoli_afp_atb, ecoli_ast_ebi %>% filter(method!="BD Phoenix"), 
+cip_analysis <- amrrules_analysis(geno_table=ecoli_afp_atb, pheno_table=ecoli_ast_ebi, 
                                     antibiotic="Ciprofloxacin", drug_class_list=c("Quinolones"),
                                     sir_col="pheno_eucast", species="Escherichia coli",
                                     info=ecoli_ast_ebi %>% select(id, source, method))
@@ -212,6 +212,71 @@ afp_all <- afp_status %>% rename(Name=sample) %>% left_join(afp) %>% filter(stat
 afp_matching <- afp_all %>% filter(Name %in% ast$id)
 ```
 
+## Review the available data and breakpoints
+
+It's a good idea to review the sources of data available, and the breakpoints available to interpret them.
+
+### Examples of tricky breakpoints
+
+There are multiple MIC breakpoints for ciprofloxacin, Meningitis and Non-meningitis:
+```
+> getBreakpoints(species="Escherichia coli", guide="EUCAST 2025", antibiotic="Ciprofloxacin")
+# A tibble: 3 × 14
+  guideline   type  host  method site    mo               rank_index ab   ref_tbl  disk_dose breakpoint_S breakpoint_R
+  <chr>       <chr> <chr> <chr>  <chr>   <mo>                  <dbl> <ab> <chr>    <chr>            <dbl>        <dbl>
+1 EUCAST 2025 human human DISK   Non-me… B_[ORD]_ENTRBCTR          5 CIP  Enterob… 5 mcg           25           22    
+2 EUCAST 2025 human human MIC    Non-me… B_[ORD]_ENTRBCTR          5 CIP  Enterob… NA               0.25         0.5  
+3 EUCAST 2025 human human MIC    Mening… B_[ORD]_ENTRBCTR          5 CIP  Enterob… NA               0.125        0.125
+```
+
+EUCAST guidance notes the Meningitis breakpoint is set lower to try to identify strains with any resistance mechanism, so this is redundant for genotype interpretation.
+When we run rules, we can set the breapoint side with `bp_site="Non-meningitis` so we retrieve the right breakpoint. Or we can set the breakpoints manually as `mic_S=0.25` and `mic_R=0.5`.
+
+There are no breakpoints for azithromycin, but there is an MIC ECOFF we can use instead to define rules, 
+by setting `mic_S=16`, `mic_R=16` and `use_disk=F` as we have no way to intpret the disk values.
+```
+> getBreakpoints(species="Escherichia coli", guide="EUCAST 2025", antibiotic="Azithromycin")
+# A tibble: 0 × 14
+# ℹ 14 variables: guideline <chr>, type <chr>, host <chr>, method <chr>, site <chr>, mo <mo>, rank_index <dbl>, ab <ab>, ref_tbl <chr>, disk_dose <chr>,
+#   breakpoint_S <dbl>, breakpoint_R <dbl>, uti <lgl>, is_SDD <lgl>
+
+> getBreakpoints(species="Escherichia coli", guide="CLSI", antibiotic="Azithromycin")
+# A tibble: 0 × 14
+# ℹ 14 variables: guideline <chr>, type <chr>, host <chr>, method <chr>, site <chr>, mo <mo>, rank_index <dbl>,
+#   ab <ab>, ref_tbl <chr>, disk_dose <chr>, breakpoint_S <dbl>, breakpoint_R <dbl>, uti <lgl>, is_SDD <lgl>
+
+> getBreakpoints(species="Escherichia coli", guide="EUCAST 2025", antibiotic="Azithromycin", type_filter = "ECOFF")
+# A tibble: 1 × 14
+  guideline   type  host  method site  mo           rank_index ab   ref_tbl disk_dose breakpoint_S breakpoint_R uti   is_SDD
+  <chr>       <chr> <chr> <chr>  <chr> <mo>              <dbl> <ab> <chr>   <chr>            <dbl>        <dbl> <lgl> <lgl> 
+1 EUCAST 2025 ECOFF ECOFF MIC    NA    B_ESCHR_COLI          2 AZM  ECOFF   NA                  16           16 FALSE FALSE
+```
+
+### Exploring data from different platforms
+We can use the `assay_by_var` function to plot the distribution of MIC or disk measures vs another variable, like assay platform or data source.
+
+For example we can check ciprofloxacin MIC distributions by assay platform, highlighting values that are expressed as ranges.
+```
+cip_mic_bymethod <- assay_by_var(ecoli_ast_ebi, antibiotic="Ciprofloxacin", measure="mic", var="method",
+                           species="Escherichia coli", bp_site="Non-meningitis")
+
+cip_mic_bymethod$plot
+
+# summarise BD Phoenix data
+ecoli_ast_ebi %>% filter(drug_agent==as.ab("Ciprofloxacin") & method=="BD Phoenix") %>% count(mic,pheno_eucast)
+# A tibble: 6 × 3
+    mic pheno_eucast     n
+  <mic> <sir>        <int>
+1 <=0.5   NI          1588
+2   1.0   R            125
+3   2.0   R              9
+4  >2.0   R            341
+5  16.0   R              1
+6 >16.0   R              1
+```
+
+This highlights that a lot of the automated platforms report MIC data as capped ranges (values highlighted in red). Many of these are still interpretable against the breakpoints, but most of the BD Phoenix data is recorded as '<=0.5', which can't be interpreted against the breakpoints S <=0.25, R >0.5, ECOFF 0.064. These values won't be used in the AMRrules analysis.
+
 ## Run analyses need to define rules
 The function `amrrules_analysis()` takes our phenotype table and extracts the data for a specified drug; then takes our genotype table and extracts the data for the relevant markers; and compares these geno/pheno data using several different `AMRgen` functions.
 
@@ -223,23 +288,13 @@ Example command
 ecoli_ast_ebi
 ecoli_afp_atb
 
-# check if the public MIC data for ciprofloxacin makes sense to analyse with EUCAST breakpoints
-cip_mic_bymethod <- assay_by_var(ecoli_ast_ebi, antibiotic="Ciprofloxacin", measure="mic", var="method",
-                           species="Escherichia coli", bp_site="Non-meningitis")
-
-cip_mic_bymethod$plot
-
-# BD Phoenix measurements are expressed as ≤0.5, 1, 2, >2 which can't be assessed against EUCAST breakpoints S <=0.25, R >0.5, ECOFF 0.064
-# Most of the other data expressed as ranges are interpretable against these breakpoints
-# In principle the AMR package should have interpreted these correctly as NI (not-interpretable), but the conservative interpretation of capped values appears to be broken
-
 # extract the information fields we want to consider in the analyses (source, method)
 info_obj <- ecoli_ast_ebi %>% select(id, source, method)
 
 # run the required analyses to compare phenotypes for a specific drug (e.g. ciprofloxacin, excluding BD Phoenix measures)
 # with genetic markers associated with the corresponding drug class (e.g. quinolones)
-cip_analysis <- amrrules_analysis(ecoli_afp_atb,
-                                    ecoli_ast_ebi %>% filter(method!="BD Phoenix"), 
+cip_analysis <- amrrules_analysis(geno_table=ecoli_afp_atb,
+                                    pheno_table=ecoli_ast_ebi, 
                                     antibiotic="Ciprofloxacin",
                                     drug_class_list=c("Quinolones"),
                                     sir_col="pheno_eucast", ecoff_col="ecoff",
@@ -256,11 +311,6 @@ cip_analysis$upset_mic_plot
 cip_analysis$upset_disk_plot # note this has very litte information content as there is very limited public disk data for ciprofloxacin (n=240)
 
 ecoli_ast_ebi %>% filter(drug_agent==as.ab("Ciprofloxacin")) %>% filter(!is.na(disk))
-
-# there are multiple breakpoints for ciprofloxacin, Meningitis and Non-meningitis:
-getBreakpoints(species=species, guide="EUCAST 2025", antibiotic=antibiotic)
-
-# EUCAST guidance notes the Meningitis breakpoint is set lower to try to identify strains with any resistance mechanism, so this is redundant for genotype interpretation
 
 # use the results of these analyses to define rules, then apply the rules back to the data to predict phenotypes
 # write out files and figures for the analysis, assay distributions, and predicted vs observed phenotypes
