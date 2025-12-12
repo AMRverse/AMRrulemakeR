@@ -206,10 +206,17 @@ The function `amrrules_analysis()` takes our phenotype table and extracts the da
 
 Example command
 ```
-# extract the information fields we want to consider (source, method)
+# import phenotype data in the right format
+afp <-read_tsv("ATB_AFP_Ecoli_AMR.tsv.gz")
+
+# import AMRfinderplus data in the right format
+ast <- import_ebi_ast("EBI_CABBAGE_EcoliShigella.csv.gz")
+
+# extract the information fields we want to consider in the analyses (source, method)
 info_obj <- ast %>% select(id, source, method)
 
-# run the required geno/pheno analyses
+# run the required analyses to compare phenotypes for a specific drug (e.g.ciprofloxacin)
+# with genetic markers associated with the corresponding drug class (e.g. quinolones)
 analysis <- amrrules_analysis(geno_table=afp, pheno_table=ast,
                               antibiotic="Ciprofloxacin",
                               drug_class_list=c("Quinolones"),
@@ -220,6 +227,7 @@ analysis <- amrrules_analysis(geno_table=afp, pheno_table=ast,
 
 # use the results of these analyses to define rules, then apply the rules back to the data to predict phenotypes
 rules <- amrrules_save(analysis, dir_path="amrrules", 
+                         bp_site="Non-meningitis",
                          ruleID_start=1,
                          use_mic=TRUE, use_disk=TRUE,
                          geno_table=afp, pheno_table=ast,
