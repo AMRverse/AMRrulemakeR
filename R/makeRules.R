@@ -463,6 +463,9 @@ makerules <- function(amrrules, minObs=3, low_threshold=20, core_threshold=0.9,
     else { # these fields are used to summarise evidence limitations
       data <- add_missing_cols(data, c("solo.sources", "solo.sources.SIR", "mic.sources", "mic.sources.SIR", "mic.x.sources", "mic.x.sources.SIR", "disk.sources", "disk.sources.SIR"))
     }
+  } else {
+    cat("  No info file provided, can't enumerate sources\n")
+    data <- add_missing_cols(data, c("solo.sources", "solo.sources.SIR", "mic.sources", "mic.sources.SIR", "mic.x.sources", "mic.x.sources.SIR", "disk.sources", "disk.sources.SIR"))
   }
 
   ## clean up rule fields and notes

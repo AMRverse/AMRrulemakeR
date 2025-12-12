@@ -22,7 +22,8 @@ amrrules_save(
   use_mic = TRUE,
   use_disk = TRUE,
   guide = "EUCAST 2025",
-  makeRules = TRUE
+  makeRules = TRUE,
+  testRules = TRUE
 )
 }
 \arguments{
@@ -61,6 +62,8 @@ amrrules_save(
 \item{guide}{The guideline to use for breakpoints, when retrieving these from the AMR package. Default is \code{"EUCAST 2025"}.}
 
 \item{makeRules}{Logical indicating whether to use define AMR rules from the data provided. Default is \code{TRUE}.}
+
+\item{testRules}{Logical indicating whether to use test the rules by using them to interpret the genotypes as S/I/R and compare to the observed phenotypes. Default is \code{TRUE}.}
 }
 \value{
 A data frame containing the generated AMR rules.

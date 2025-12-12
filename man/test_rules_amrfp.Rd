@@ -34,11 +34,11 @@ defined rule sets that use hierarchical \code{nodeID}s.
 \examples{
 \dontrun{
 # apply the rules to generate S/I/R and wildtype/nonwildtype calls
-calls <- test_rules_amrfp(geno_table = my_genotypes, rules = my_rules, species = "s_Escherichia coli")
+calls <- test_rules_amrfp(geno_table = my_genotypes, rules = my_rules, species = "s__Escherichia coli")
 
 # compare these calls to the AST data phenotypes in a separate dataframe, `pheno_table` with SIR phenotypes in `pheno`
 calls_vs_pheno <- calls \%>\% left_join(pheno_table, join_by(Name==id))
-calls_vs_pheno \%>\% group_by(pheno, category) \%>\% count() \%>\% filter(pheno \%in\% c("S", "I", "R")) 
+calls_vs_pheno \%>\% group_by(pheno, category) \%>\% count() \%>\% filter(pheno \%in\% c("S", "I", "R"))
 }
 
 }

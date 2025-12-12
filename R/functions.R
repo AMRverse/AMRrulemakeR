@@ -276,16 +276,32 @@ getSources <- function(amr_binary, combo, assay, exclude_range_values=FALSE) {
   return(sources)
 }
 
-enumerate_source_info <- function(data, info, solo_binary, amr_binary, column="source", use_mic=NULL, use_disk=NULL) {
-  if (column %in% colnames(info)) {
+enumerate_source_info <- function(data, info=NULL, solo_binary, amr_binary, column="source", use_mic=NULL, use_disk=NULL) {
+  if (!(column %in% colnames(solo_binary))) {
+    if (!is.null(info)) {
+      if (column %in% colnames(info)) {
+        solo_binary <- solo_binary %>%
+          left_join(info %>% select(id, !!sym(column)), by="id")
+      }
+    }
+  }
+
+  if (!(column %in% colnames(amr_binary))) {
+    if (!is.null(info)) {
+      if (column %in% colnames(info)) {
+        amr_binary <- amr_binary %>%
+          left_join(info %>% select(id, !!sym(column)), by="id")
+      }
+    }
+  }
+
+  if (column %in% colnames(solo_binary)) {
     solo_sources_pheno <- solo_binary %>%
-      left_join(info, by="id") %>%
       filter(!is.na(pheno) & !is.na(marker) & value==1) %>%
       select(all_of(column), marker) %>% distinct() %>%
       group_by(marker) %>% count(name=paste0("solo.",column,"s_pheno"))
 
     solo_sources_ecoff <- solo_binary %>%
-      left_join(info, by="id") %>%
       filter(!is.na(ecoff) & !is.na(marker) & value==1) %>%
       select(all_of(column), marker) %>% distinct() %>%
       group_by(marker) %>% count(name=paste0("solo.",column,"s_ecoff"))
@@ -299,14 +315,12 @@ enumerate_source_info <- function(data, info, solo_binary, amr_binary, column="s
 
     # add sources per pheno value
     solo_sources_per_pheno <- solo_binary %>%
-      left_join(info, by="id") %>%
       filter(!is.na(pheno) & !is.na(marker) & value==1) %>%
       select(all_of(column), marker, pheno) %>% distinct() %>%
       group_by(marker, pheno) %>% count() %>%
       pivot_wider(names_from=pheno, names_prefix=paste0("pheno_solo.",column,"s."), values_from=n, values_fill=0)
 
     solo_sources_per_ecoff <- solo_binary %>%
-      left_join(info, by="id") %>%
       filter(!is.na(ecoff) & !is.na(marker) & value==1) %>%
       select(all_of(column), marker, ecoff) %>% distinct() %>%
       group_by(marker, ecoff) %>% count() %>%
@@ -326,9 +340,9 @@ enumerate_source_info <- function(data, info, solo_binary, amr_binary, column="s
     solo_sources <- full_join(solo_sources, solo_sources_per, by="marker")
 
     data <- data %>% left_join(solo_sources, by="marker")
+  }
 
-    amr_binary <- amr_binary %>% left_join(info, by="id")
-
+  if (column %in% colnames(amr_binary)) {
     if (use_mic) {
       data <- data %>% rowwise() %>%
         mutate(source_info=getSources(amr_binary, marker, "mic")) %>%
@@ -363,6 +377,7 @@ enumerate_source_info <- function(data, info, solo_binary, amr_binary, column="s
       data <- data %>% mutate(disk.sources.SIR = paste0(na0(disk.sources.S), " S, ", na0(disk.sources.I), " I, ", na0(disk.sources.R), " R"))
     } else {data$disk.sources.SIR <- "-"}
   }
+
   return(data)
 }
 
@@ -634,67 +649,15 @@ checkMICranges <- function(geno_table, pheno_table, antibiotic, drug_class_list,
 
   }
 
-  mic_interpretations_table <- pheno_table_micdisk %>% filter(drug_agent==as.ab(antibiotic) & !is.na(mic)) %>%
-    group_by(mic) %>% count() %>% ungroup() %>% mutate(drug_agent=as.ab(antibiotic))
-
-  mic_interpretations_table <- safe_execute(mic_interpretations_table %>%
-    mutate(across(where(is.mic), as.sir, ab=drug_agent, mo = as.mo("Escherichia coli"),
-                  capped_mic_handling="conservative", guideline = "EUCAST 2025", .names = "vs_breakpoints")))
-
-  mic_interpretations_table <- safe_execute(mic_interpretations_table %>%
-    mutate(across(where(is.mic), as.sir, ab=drug_agent, mo = as.mo("Escherichia coli"),
-                  capped_mic_handling="conservative", guideline = "EUCAST 2025", .names = "vs_ecoff", breakpoint_type = "ECOFF")))
-
   marker_count <- soloPPV_micdisk$amr_binary %>% select(-any_of(c("id", "pheno", "ecoff", "mic", "disk", "R", "I", "NWT"))) %>% rowSums()
-  marker_count <- tibble(id=soloPPV_micdisk$amr_binary$id, marker_count=marker_count)
+  marker_free_strains <- soloPPV_micdisk$amr_binary$id[marker_count==0]
 
-  ecoff <- safe_execute(getBreakpoints(species=species, guide="EUCAST 2025", antibiotic=antibiotic, "ECOFF") %>% filter(method=="MIC") %>% pull(breakpoint_S))
-  mic_S <- safe_execute(unlist(checkBreakpoints(species=species, guide="EUCAST 2025", antibiotic=antibiotic, bp_site=bp_site, assay="MIC")[1]))
-  mic_R <- safe_execute(unlist(checkBreakpoints(species=species, guide="EUCAST 2025", antibiotic=antibiotic, bp_site=bp_site, assay="MIC")[2]))
+  mic_dist <- assay_by_var(pheno_table=pheno_table_micdisk, antibiotic=antibiotic, measure="mic", var="method",
+                           species=species, marker_free_strains=marker_free_strains, bp_site=bp_site)
 
-
-  mic_plot_by_method_dat <- marker_count %>% filter(marker_count==0) %>%
-    left_join(pheno_table_micdisk %>% filter(drug_agent==as.ab(antibiotic)), by="id") %>%
-    filter(!is.na(mic)) %>%
-    arrange(mic)
-
-  if (nrow(mic_plot_by_method_dat)>0) {
-    mic_plot_by_method <- mic_plot_by_method_dat %>%
-    mutate(range=if_else(grepl("<",mic), "range", "value")) %>%
-    ggplot(aes(y=factor(mic), fill=range)) +
-    geom_bar() +
-    labs(y="MIC", x="count", title=paste(antibiotic, "MIC distributions for samples with no markers identified"),
-         subtitle=paste("ECOFF:", ecoff, "S <=", mic_S, "R>", mic_R)) +
-    scale_fill_manual(values=c(range="maroon", value="navy", `NA`="grey"))
-
-    if (sum(!is.na(mic_plot_by_method_dat$method))>0) {
-      mic_plot_by_method <- mic_plot_by_method + facet_wrap(~method, nrow=1, scales="free_x")
-    }
-  } else {mic_plot_by_method <- NULL}
-
-  mic_plot_by_method_allgenomes_dat <-pheno_table_micdisk %>%
-    filter(drug_agent==as.ab(antibiotic)) %>%
-    filter(!is.na(mic)) %>%
-    arrange(mic)
-
-  if (nrow(mic_plot_by_method_allgenomes_dat)>0) {
-   mic_plot_by_method_allgenomes <- mic_plot_by_method_allgenomes_dat %>%
-    mutate(range=if_else(grepl("<",mic), "range", "value")) %>%
-    ggplot(aes(y=factor(mic), fill=range)) +
-    geom_bar() +
-    labs(y="MIC", x="count", title=paste(antibiotic, "MIC distributions for all samples"),
-         subtitle=paste("ECOFF:", ecoff, "S <=", mic_S, "R>", mic_R)) +
-    scale_fill_manual(values=c(range="maroon", value="navy", `NA`="grey"))
-   if (sum(!is.na(mic_plot_by_method_allgenomes_dat$method))>0) {
-     mic_plot_by_method_allgenomes <- mic_plot_by_method_allgenomes + facet_wrap(~method, nrow=1, scales="free_x")
-   }
-  } else {mic_plot_by_method_allgenomes <- NULL}
-
-  return(list(mic_plot_nomarkers=mic_plot_by_method,
-              mic_plot_all=mic_plot_by_method_allgenomes,
-              mic_table=mic_interpretations_table,
+  return(list(mic_plot_nomarkers=mic_dist$plot_nomarkers,
+              mic_plot_all=mic_dist$plot,
               plot=compare_solo_plot,
               table=compare_solo,
               soloPPV_micdisk=soloPPV_micdisk))
 }
-

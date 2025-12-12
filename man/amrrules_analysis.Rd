@@ -19,7 +19,16 @@ amrrules_analysis(
   minPPV = 1,
   mafLogReg = 5,
   mafUpset = 1,
-  info = NULL
+  info = NULL,
+  excludeRanges = TRUE,
+  bp_site = NULL,
+  mic_S = NULL,
+  mic_R = NULL,
+  disk_S = NULL,
+  disk_R = NULL,
+  use_mic = TRUE,
+  use_disk = TRUE,
+  call_manual = TRUE
 )
 }
 \arguments{
@@ -52,6 +61,20 @@ amrrules_analysis(
 \item{mafUpset}{Minor allele frequency threshold for upset plot inclusion (default: 1).}
 
 \item{info}{Data frame indicating information about each sample, so we can summarise the source/s of data supporting each rule. First column should be sample id, matching that in the \code{pheno_table} object.}
+
+\item{mic_S}{The MIC breakpoint to define S (Optional, by default breakpoints are extracted using the AMR package, however if none are available or user wants to use a different one e.g. an ECOFF then it can be specified here).}
+
+\item{mic_R}{The MIC breakpoint to define R (Optional, by default breakpoints are extracted using the AMR package, however if none are available or user wants to use a different one e.g. an ECOFF then it can be specified here).}
+
+\item{disk_S}{The disk breakpoint to define S (Optional, by default breakpoints are extracted using the AMR package, however if none are available or user wants to use a different one e.g. an ECOFF then it can be specified here).}
+
+\item{disk_R}{The disk breakpoint to define R (Optional, by default breakpoints are extracted using the AMR package, however if none are available or user wants to use a different one e.g. an ECOFF then it can be specified here).}
+
+\item{use_mic}{Logical indicating whether to use MIC data in rule generation. Default is \code{TRUE}.}
+
+\item{use_disk}{Logical indicating whether to use disk diffusion data for rule generation. Default is \code{TRUE}.}
+
+\item{call_manual}{Logical indicating whether to interpret assay data manually against the provided S/R breakpoints, if they are provided. Otherwise we assume the input pheno_table object has interpreted phenotypes already (in column 'sir_col').}
 }
 \value{
 A list containing:

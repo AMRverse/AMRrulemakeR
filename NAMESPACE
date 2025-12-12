@@ -2,7 +2,9 @@
 
 export(amrrules_analysis)
 export(amrrules_save)
+export(categorise_from_PPV)
 export(checkBreakpoints)
+export(compare_categories)
 export(getBreakpoints)
 export(makerules)
 export(summarise_data)
