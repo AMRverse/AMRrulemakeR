@@ -48,39 +48,72 @@ library(AMRgen)
 library(AMRrulemakeR)
 library(tidyverse)
 
-# example data from AMRgen package: E. coli MIC data from NCBI, matching AMRfinderplus data
-ecoli_ast
-ecoli_geno <- import_amrfp(ecoli_geno_raw, "Name")
+# example data included in AMRrulemakeR package: EBI AST data for 19,797 E. coli tested against at least one of 5 drugs (ampicillin, ceftriaxone, ciprofloxacin, azithromycin, trimethoprim-sulfamethozole), with matching AMRfinderplus data from the Allthebacteria project:
+ecoli_ast_ebi
+ecoli_afp_atb
 
-# run quantitative analyses
-cip_analysis <- amrrules_analysis(ecoli_geno, ecoli_ast, antibiotic="Cipro", drug_class_list=c("Quinolones"), species="E. coli")
+# check if the public MIC data for ciprofloxacin makes sense to analyse with EUCAST breakpoints
+cip_mic_bymethod <- assay_by_var(ecoli_ast_ebi, antibiotic="Ciprofloxacin", measure="mic", var="method",
+                           species="Escherichia coli", bp_site="Non-meningitis")
 
+cip_mic_bymethod$plot
+
+# BD Phoenix measurements are expressed as ≤0.5, 1, 2, >2 which can't be assessed against EUCAST breakpoints S <=0.25, R >0.5, ECOFF 0.064
+# Most of the other data expressed as ranges are interpretable against these breakpoints
+# In principle the AMR package should have interpreted these correctly as NI (not-interpretable), but the conservative interpretation of capped values appears to be broken
+
+# run quantitative analyses for ciprofloxacin phenotypes vs quinolone marker genotypes, using the S/I/R calls made against EUCAST breakpoints
+cip_analysis <- amrrules_analysis(ecoli_afp_atb, ecoli_ast_ebi %>% filter(method!="BD Phoenix"), 
+                                    antibiotic="Ciprofloxacin", drug_class_list=c("Quinolones"),
+                                    sir_col="pheno_eucast", species="Escherichia coli",
+                                    info=ecoli_ast_ebi %>% select(id, source, method))
+
+# check key output plots
 cip_analysis$ppv_plot
+cip_analysis$ppv_plot_all # this includes data with S/I/R interpretations from EBI but no raw assay values (treated as the 'extended' dataset in the analysis)
+cip_analysis$logistic_plot # note this is only used if the marker is not found solo, to support a call of WT S based on lack of association with resistance in the regression
+cip_analysis$logistic_plot_all
 cip_analysis$upset_mic_plot
-cip_analysis$upset_disk_plot
+cip_analysis$upset_disk_plot # note this has very litte information content as there is very limited public disk data for ciprofloxacin (n=240)
 
-# save tables and plots and generate rules
-cip_rules <- amrrules_save(cip_analysis, bp_site="Non-meningitis", dir_path="amrrules", file_prefix="Cipro", use_disk=F, guide="CLSI 2025")
+ecoli_ast_ebi %>% filter(drug_agent==as.ab("Ciprofloxacin")) %>% filter(!is.na(disk))
 
-# alternatively, call makerules directly on the analysis object
-cip_rules <- makerules(cip_analysis, bp_site="Non-meningitis", use_disk=F, guide="CLSI 2025")
+# there are multiple breakpoints for ciprofloxacin, Meningitis and Non-meningitis:
+getBreakpoints(species=species, guide="EUCAST 2025", antibiotic=antibiotic)
+
+# EUCAST guidance notes the Meningitis breakpoint is set lower to try to identify strains with any resistance mechanism, so this is redundant for genotype interpretation
+
+# save analysis tables and plots, and generate rules using the Non-meningitis breakpoint, save output to 'amrrules/' with filenames starting with 'Ciprofloxacin'
+# then use the rules to predicted phenotypes from genotypes and compare to the observed phenotypes (to help try to spot issues with input data and proposed rules)
+cip_rules <- amrrules_save(cip_analysis, bp_site="Non-meningitis",
+                           dir_path="amrrules", file_prefix="Ciprofloxacin")
+
+# alternatively, call makerules directly on the analysis object without saving outputs or running predictions
+cip_rules <- makerules(cip_analysis, bp_site="Non-meningitis")
 
 # view the proposed rules, in AMRrules specification format, with quantitative fields added
 view(cip_rules$rules)
+
+# manually apply rules to interpret quinolone marker genotypes
+cip_test <- test_rules_amrfp(ecoli_afp_atb %>% filter(drug_class %in% c("Quinolones"),
+                                 rules=cip_rules$rules, species="Escherichia coli")
+
+# compare these to the input phenotypes
+cip_test %>% left_join(ecoli_ast_ebi, join_by("Name"=="id")) %>% count(category,pheno_eucast)
 
 ```
 
 # Work in progress - suggested protocol for developing AMRrules using this package
 
 ## Collate and format phenotype data
-For use with the AMRgen & AMRrulemakeR packages, you need to get the AST data into long format (one row per sample/drug result), with some key fields.
+For use with the AMRgen & AMRrulemakeR packages, you need to get the antimicrobial susceptibility AST (phenotype) data into long format (one row per sample/drug result), with some key fields.
 Data in NCBI or EBI antibiogram format can be automatically imported to the right dataframe using the `import_ast()` in the AMRgen package.
 Or you can format your data manually. 
 
-Example data frame included in the AMRgen package:
+Example data frame containg data from EBI on E. coli with AST results for five drugs, imported using import_ast():
 
 ```
-> ecoli_ast
+> ecoli_ast_ebi
 
 # A tibble: 4,170 × 10
    id           drug_agent     mic  disk pheno_clsi ecoff guideline method pheno_provided spp_pheno   
