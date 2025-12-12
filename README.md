@@ -265,7 +265,6 @@ rules <- amrrules_save(analysis, dir_path="amrrules",
                          bp_site="Non-meningitis",
                          ruleID_start=1,
                          use_mic=TRUE, use_disk=TRUE,
-                         geno_table=afp, pheno_table=ast,
                          file_prefix=file_prefix)
 ```
 
