@@ -48,19 +48,9 @@ library(AMRgen)
 library(AMRrulemakeR)
 library(tidyverse)
 
-# example data included in AMRrulemakeR package: EBI AST data for 19,797 E. coli tested against at least one of 5 drugs (ampicillin, ceftriaxone, ciprofloxacin, azithromycin, trimethoprim-sulfamethozole), with matching AMRfinderplus data from the Allthebacteria project:
+# example data included in AMRrulemakeR package
 ecoli_ast_ebi
 ecoli_afp_atb
-
-# check if the public MIC data for ciprofloxacin makes sense to analyse with EUCAST breakpoints
-cip_mic_bymethod <- assay_by_var(ecoli_ast_ebi, antibiotic="Ciprofloxacin", measure="mic", var="method",
-                           species="Escherichia coli", bp_site="Non-meningitis")
-
-cip_mic_bymethod$plot
-
-# BD Phoenix measurements are expressed as ≤0.5, 1, 2, >2 which can't be assessed against EUCAST breakpoints S <=0.25, R >0.5, ECOFF 0.064
-# Most of the other data expressed as ranges are interpretable against these breakpoints
-# In principle the AMR package should have interpreted these correctly as NI (not-interpretable), but the conservative interpretation of capped values appears to be broken
 
 # run quantitative analyses for ciprofloxacin phenotypes vs quinolone marker genotypes, using the S/I/R calls made against EUCAST breakpoints
 cip_analysis <- amrrules_analysis(ecoli_afp_atb, ecoli_ast_ebi %>% filter(method!="BD Phoenix"), 
@@ -72,16 +62,7 @@ cip_analysis <- amrrules_analysis(ecoli_afp_atb, ecoli_ast_ebi %>% filter(method
 cip_analysis$ppv_plot
 cip_analysis$ppv_plot_all # this includes data with S/I/R interpretations from EBI but no raw assay values (treated as the 'extended' dataset in the analysis)
 cip_analysis$logistic_plot # note this is only used if the marker is not found solo, to support a call of WT S based on lack of association with resistance in the regression
-cip_analysis$logistic_plot_all
 cip_analysis$upset_mic_plot
-cip_analysis$upset_disk_plot # note this has very litte information content as there is very limited public disk data for ciprofloxacin (n=240)
-
-ecoli_ast_ebi %>% filter(drug_agent==as.ab("Ciprofloxacin")) %>% filter(!is.na(disk))
-
-# there are multiple breakpoints for ciprofloxacin, Meningitis and Non-meningitis:
-getBreakpoints(species=species, guide="EUCAST 2025", antibiotic=antibiotic)
-
-# EUCAST guidance notes the Meningitis breakpoint is set lower to try to identify strains with any resistance mechanism, so this is redundant for genotype interpretation
 
 # save analysis tables and plots, and generate rules using the Non-meningitis breakpoint, save output to 'amrrules/' with filenames starting with 'Ciprofloxacin'
 # then use the rules to predicted phenotypes from genotypes and compare to the observed phenotypes (to help try to spot issues with input data and proposed rules)
@@ -113,18 +94,20 @@ Or you can format your data manually.
 Example data frame containg data from EBI on E. coli with AST results for five drugs, imported using import_ast():
 
 ```
-> ecoli_ast_ebi
-
-# A tibble: 4,170 × 10
-   id           drug_agent     mic  disk pheno_clsi ecoff guideline method pheno_provided spp_pheno   
-   <chr>        <ab>         <mic> <dsk> <sir>      <sir> <chr>     <chr>  <sir>          <mo>        
- 1 SAMN36015110 CIP        <128.00    NA   R          R   CLSI      NA       R            B_ESCHR_COLI
- 2 SAMN11638310 CIP         256.00    NA   R          R   CLSI      NA       R            B_ESCHR_COLI
- 3 SAMN05729964 CIP          64.00    NA   R          R   CLSI      Etest    R            B_ESCHR_COLI
- 4 SAMN10620111 CIP         >=4.00    NA   R          R   CLSI      NA       R            B_ESCHR_COLI
- 5 SAMN10620168 CIP         >=4.00    NA   R          R   CLSI      NA       R            B_ESCHR_COLI
- 6 SAMN10620104 CIP         <=0.25    NA   S          R   CLSI      NA       S            B_ESCHR_COLI
-
+> ecoli_ast_ebi %>% filter(!is.na(mic))
+# A tibble: 43,288 × 47
+   id        drug_agent   mic  disk pheno_eucast pheno_clsi ecoff guideline method source pheno_provided spp_pheno   
+   <chr>     <ab>       <mic> <dsk> <sir>        <sir>      <sir> <chr>     <chr>  <chr>  <sir>          <mo>        
+ 1 SAMN1302… AMP           >8    NA   R            I          R   EUCAST    BD Ph… 32205…   R            B_ESCHR_COLI
+ 2 SAMN1302… AMP           >8    NA   R            I          R   EUCAST    BD Ph… 32205…   R            B_ESCHR_COLI
+ 3 SAMN1302… AMP           >8    NA   R            I          R   EUCAST    BD Ph… 32205…   R            B_ESCHR_COLI
+ 4 SAMN1302… AMP          <=2    NA   S            S          S   EUCAST    BD Ph… 32205…   S            B_ESCHR_COLI
+ 5 SAMN1302… AMP           >8    NA   R            I          R   EUCAST    BD Ph… 32205…   R            B_ESCHR_COLI
+ 6 SAMN1302… AMP           >8    NA   R            I          R   EUCAST    BD Ph… 32205…   R            B_ESCHR_COLI
+ 7 SAMN1302… AMP           >8    NA   R            I          R   EUCAST    BD Ph… 32205…   R            B_ESCHR_COLI
+ 8 SAMN1302… AMP          <=2    NA   S            S          S   EUCAST    BD Ph… 32205…   S            B_ESCHR_COLI
+ 9 SAMN1302… AMP          <=2    NA   S            S          S   EUCAST    BD Ph… 32205…   S            B_ESCHR_COLI
+10 SAMN1302… AMP           >8    NA   R            I          R   EUCAST    BD Ph… 32205…   R            B_ESCHR_COLI
 ```
 
 The key fields needed are:
@@ -178,24 +161,20 @@ For use with the AMRrulemakeR package, you need to process the AMRfinderplus dat
 Example data frame included in the AMRgen package:
 
 ```
-ecoli_geno <- import_amrfp(ecoli_geno_raw, "Name")
-
-ecoli_geno
-
-# A tibble: 50,720 × 36
-   Name         gene        mutation  node      `variation type` marker marker.label drug_agent drug_class
-   <chr>        <chr>       <chr>     <chr>     <chr>            <chr>  <chr>        <ab>       <chr>     
- 1 SAMN03177615 blaEC       NA        blaEC     Gene presence d… blaEC  blaEC        NA         Beta-lact…
- 2 SAMN03177615 acrF        NA        acrF      Gene presence d… acrF   acrF         NA         Efflux    
- 3 SAMN03177615 glpT        Glu448Lys glpT      Protein variant… glpT_… glpT:Glu448… FOS        Other ant…
- 4 SAMN03177615 floR        NA        floR      Gene presence d… floR   floR         CHL        Amphenico…
- 5 SAMN03177615 floR        NA        floR      Gene presence d… floR   floR         FLR        Other ant…
- 6 SAMN03177615 mdtM        NA        mdtM      Gene presence d… mdtM   mdtM         NA         Efflux    
- 7 SAMN03177615 blaTEM-1    NA        blaTEM-1  Gene presence d… blaTE… blaTEM-1     NA         Beta-lact…
- 8 SAMN03177615 sul2        NA        sul2      Gene presence d… sul2   sul2         SSS        Other ant…
- 9 SAMN03177615 aph(3'')-Ib NA        aph(3'')… Gene presence d… aph(3… aph(3'')-Ib  STR1       Aminoglyc…
-10 SAMN03177615 aph(6)-Id   NA        aph(6)-Id Gene presence d… aph(6… aph(6)-Id    STR1       Aminoglyc…
-
+> ecoli_afp_atb
+# A tibble: 73,221 × 36
+   Name         gene  mutation node  `variation type` marker marker.label drug_agent drug_class status
+   <chr>        <chr> <chr>    <chr> <chr>            <chr>  <chr>        <ab>       <chr>      <chr> 
+ 1 SAMN03177641 blaC… NA       blaC… Gene presence d… blaCM… blaCMY-2     NA         Cephalosp… PASS  
+ 2 SAMN03177641 sul2  NA       sul2  Gene presence d… sul2   sul2         SSS        Sulfonami… PASS  
+ 3 SAMN03177641 blaT… NA       blaT… Gene presence d… blaTE… blaTEM-1     NA         Beta-lact… PASS  
+ 4 SAMN13024031 dfrA5 NA       dfrA5 Gene presence d… dfrA5  dfrA5        NA         Trimethop… PASS  
+ 5 SAMN13024031 sul2  NA       sul2  Gene presence d… sul2   sul2         SSS        Sulfonami… PASS  
+ 6 SAMN13024031 blaT… NA       blaT… Gene presence d… blaTE… blaTEM-1     NA         Beta-lact… PASS  
+ 7 SAMN26308528 sul2  NA       sul2  Gene presence d… sul2   sul2         SSS        Sulfonami… PASS  
+ 8 SAMD00499563 gyrA  Asp87Asn gyrA  Protein variant… gyrA_… gyrA:Asp87A… NA         Quinolones PASS  
+ 9 SAMD00499563 gyrA  Ser83Leu gyrA  Protein variant… gyrA_… gyrA:Ser83L… NA         Quinolones PASS  
+10 SAMD00499563 parC  Glu84Val parC  Protein variant… parC_… parC:Glu84V… NA         Quinolones PASS  
 ```
 
 The key fields needed are:
@@ -238,37 +217,73 @@ The function `amrrules_analysis()` takes our phenotype table and extracts the da
 
 The function `amrrules_save()` takes these analysis results, and saves key tables and figures. It then uses these results to define rules in AMRrules format via the `makerules()` function, and writes these to an output TSV file. Finally, the rules are applied to the input genotypes to predict S/I/R and wildtype/nonwildtype for each sample using the `test_rules_amrfp()` function, and these results are compared to the input phenotypes and summarised in terms of positive predictive value (including stratified by assay method) to help assess the validity of the rules.
 
-
 Example command
 ```
-# import phenotype data in the right format
-afp <-read_tsv("ATB_AFP_Ecoli_AMR.tsv.gz")
+# example data included in AMRrulemakeR package: EBI AST data for 19,797 E. coli tested against at least one of 5 drugs (ampicillin, ceftriaxone, ciprofloxacin, azithromycin, trimethoprim-sulfamethozole), with matching AMRfinderplus data from the Allthebacteria project:
+ecoli_ast_ebi
+ecoli_afp_atb
 
-# import AMRfinderplus data in the right format
-ast <- import_ebi_ast("EBI_CABBAGE_EcoliShigella.csv.gz")
+# check if the public MIC data for ciprofloxacin makes sense to analyse with EUCAST breakpoints
+cip_mic_bymethod <- assay_by_var(ecoli_ast_ebi, antibiotic="Ciprofloxacin", measure="mic", var="method",
+                           species="Escherichia coli", bp_site="Non-meningitis")
+
+cip_mic_bymethod$plot
+
+# BD Phoenix measurements are expressed as ≤0.5, 1, 2, >2 which can't be assessed against EUCAST breakpoints S <=0.25, R >0.5, ECOFF 0.064
+# Most of the other data expressed as ranges are interpretable against these breakpoints
+# In principle the AMR package should have interpreted these correctly as NI (not-interpretable), but the conservative interpretation of capped values appears to be broken
 
 # extract the information fields we want to consider in the analyses (source, method)
-info_obj <- ast %>% select(id, source, method)
+info_obj <- ecoli_ast_ebi %>% select(id, source, method)
 
-# run the required analyses to compare phenotypes for a specific drug (e.g.ciprofloxacin)
+# run the required analyses to compare phenotypes for a specific drug (e.g. ciprofloxacin, excluding BD Phoenix measures)
 # with genetic markers associated with the corresponding drug class (e.g. quinolones)
-analysis <- amrrules_analysis(geno_table=afp, pheno_table=ast,
-                              antibiotic="Ciprofloxacin",
-                              drug_class_list=c("Quinolones"),
-                              species="Escherichia coli",
-                              sir_col="pheno_eucast", ecoff_col="ecoff", 
-                              minPPV=1, mafLogReg=5, mafUpset=1,
-                              info=info_obj)
+cip_analysis <- amrrules_analysis(ecoli_afp_atb,
+                                    ecoli_ast_ebi %>% filter(method!="BD Phoenix"), 
+                                    antibiotic="Ciprofloxacin",
+                                    drug_class_list=c("Quinolones"),
+                                    sir_col="pheno_eucast", ecoff_col="ecoff",
+                                    species="Escherichia coli",
+                                    minPPV=1, mafLogReg=5, mafUpset=1,
+                                    info=info_obj)
+
+# check key output plots
+cip_analysis$ppv_plot
+cip_analysis$ppv_plot_all # this includes data with S/I/R interpretations from EBI but no raw assay values (treated as the 'extended' dataset in the analysis)
+cip_analysis$logistic_plot # note this is only used if the marker is not found solo, to support a call of WT S based on lack of association with resistance in the regression
+cip_analysis$logistic_plot_all
+cip_analysis$upset_mic_plot
+cip_analysis$upset_disk_plot # note this has very litte information content as there is very limited public disk data for ciprofloxacin (n=240)
+
+ecoli_ast_ebi %>% filter(drug_agent==as.ab("Ciprofloxacin")) %>% filter(!is.na(disk))
+
+# there are multiple breakpoints for ciprofloxacin, Meningitis and Non-meningitis:
+getBreakpoints(species=species, guide="EUCAST 2025", antibiotic=antibiotic)
+
+# EUCAST guidance notes the Meningitis breakpoint is set lower to try to identify strains with any resistance mechanism, so this is redundant for genotype interpretation
 
 # use the results of these analyses to define rules, then apply the rules back to the data to predict phenotypes
-rules <- amrrules_save(analysis, dir_path="amrrules", 
-                         bp_site="Non-meningitis",
-                         ruleID_start=1,
-                         use_mic=TRUE, use_disk=TRUE,
-                         file_prefix=file_prefix)
+# write out files and figures for the analysis, assay distributions, and predicted vs observed phenotypes
+cip_rules <- amrrules_save(cip_analysis, 
+                           bp_site="Non-meningitis",
+                           ruleID_start=1,
+                           use_mic=TRUE, use_disk=TRUE,
+                           file_prefix="Ciprofloxacin")
+
+# alternatively, call makerules directly on the analysis object without saving outputs or running predictions
+cip_rules <- makerules(cip_analysis, bp_site="Non-meningitis")
+
+# view the proposed rules, in AMRrules specification format, with quantitative fields added
+view(cip_rules$rules)
+
+# manually apply rules to interpret quinolone marker genotypes
+cip_test <- test_rules_amrfp(ecoli_afp_atb %>% filter(drug_class %in% c("Quinolones"),
+                                 rules=cip_rules$rules, species="Escherichia coli")
+
+# compare these to the input phenotypes
+cip_test %>% left_join(ecoli_ast_ebi, join_by("Name"=="id")) %>% count(category,pheno_eucast)
 ```
 
 Notes:
-1. Currently we use the supplied pheno_table to get the assay method to plot predictions vs method, but we could do this from the info_obj.
-2. Add examples with multiple entries in drug_class_list (e.g. trim-sulfa, beta-lactams)
-3. Add examples with manually supplied breakpoints (e.g. using azithromycin ECOFF as breakpoint)
+1. Add examples with multiple entries in drug_class_list (e.g. trim-sulfa, beta-lactams - they are included in the data file read)
+2. Add examples with manually supplied breakpoints (e.g. using azithromycin ECOFF as breakpoint - this is included in the data file read)
