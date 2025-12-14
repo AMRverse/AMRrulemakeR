@@ -55,7 +55,8 @@ ecoli_afp_atb
 # run quantitative analyses for ciprofloxacin phenotypes vs quinolone marker genotypes, using the S/I/R calls made against EUCAST breakpoints
 cip_analysis <- amrrules_analysis(geno_table=ecoli_afp_atb, pheno_table=ecoli_ast_ebi, 
                                     antibiotic="Ciprofloxacin", drug_class_list=c("Quinolones"),
-                                    sir_col="pheno_eucast", species="Escherichia coli",
+                                    sir_col="pheno_eucast", ecoff_col="ecoff",
+                                    species="Escherichia coli",
                                     info=ecoli_ast_ebi %>% select(id, source, method))
 
 # check key output plots
@@ -81,6 +82,13 @@ cip_test <- test_rules_amrfp(ecoli_afp_atb %>% filter(drug_class %in% c("Quinolo
 
 # compare these to the input phenotypes
 cip_test %>% left_join(ecoli_ast_ebi, join_by("Name"=="id")) %>% count(category,pheno_eucast)
+
+# make some plots to view predictions vs raw assay values from different methods, and
+# explore positive predictive value of the overall ruleset including stratified by method 
+compare_pred <- compare_interpretations(pred=cip_test, obs=ecoli_ast_ebi,
+                                        antibiotic="Ciprofloxacin",
+                                        sir_col="pheno_eucast", ecoff_col="ecoff",
+                                        var="method"))
 
 ```
 
