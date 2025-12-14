@@ -334,6 +334,97 @@ cip_test <- test_rules_amrfp(ecoli_afp_atb %>% filter(drug_class %in% c("Quinolo
 cip_test %>% left_join(ecoli_ast_ebi, join_by("Name"=="id")) %>% count(category,pheno_eucast)
 ```
 
-Notes:
-1. Add examples with multiple entries in drug_class_list (e.g. trim-sulfa, beta-lactams - they are included in the data file read)
-2. Add examples with manually supplied breakpoints (e.g. using azithromycin ECOFF as breakpoint - this is included in the data file read)
+### Examples with markers for multiple drug classes
+
+**Combination antibiotics:** Trimethoprim-sulfamethoazole is a commonly used combination drug. To define rules for its resistance, we need to consider markers associated with resistance to both classes included in the combination, via `drug_class_list=c("Trimethoprims", "Sulfonamides")`:
+```
+trimsulfa_analysis <- amrrules_analysis(geno_table=ecoli_afp_atb,
+                                    pheno_table=ecoli_ast_ebi, 
+                                    antibiotic="Trimethoprim-Sulfamethoxazole",
+                                    drug_class_list=c("Trimethoprims", "Sulfonamides"),
+                                    sir_col="pheno_eucast", ecoff_col="ecoff",
+                                    species="Escherichia coli",
+                                    minPPV=1, mafLogReg=5, mafUpset=1,
+                                    info=info_obj)
+
+# solo PPV shows individual markers don't confer clinical resistance
+trimsulfa_analysis$ppv_plot
+
+# upset plots show some marker combinations lead to resistance
+trimsulfa_analysis$upset_mic_plot
+trimsulfa_analysis$upset_disk_plot
+
+# define rules
+trimsulfa_rules <- makerules(trimsulfa_analysis)
+```
+
+**Beta-lactam antibiotics:** Beta-lactamases classified as cephalosporinases (class 'Cephalosporins' in NCBI refgene) have activity against narrow-spectrum beta-lactam drugs (such as ampicillin) as well as cephalosporins. Beta-lactamases classified as carbapenemases (class 'Carbapenems' in NCBI refgene) also have activity against narrow-spectrum beta-lactam drugs and cephalosporins as well as carbapenems. So to analyse geno-pheno relationships for beta-lactam drugs like ampicillin, we need to consider all three classes of markers in AMRfinderplus output that have activity against beta-lactams: `drug_class_list=c("Beta-lactams/penicillins", "Cephalosporins", "Carbapenems")`. 
+```
+amp_analysis <- amrrules_analysis(geno_table=ecoli_afp_atb,
+                                    pheno_table=ecoli_ast_ebi, 
+                                    antibiotic="Ampicillin",
+                                    drug_class_list=c("Beta-lactams/penicillins", "Cephalosporins", "Carbapenems"),
+                                    sir_col="pheno_eucast", ecoff_col="ecoff",
+                                    species="Escherichia coli",
+                                    minPPV=1, mafLogReg=5, mafUpset=1,
+                                    info=info_obj)
+
+# the solo PPV plot confirms that, as expected, ESBL genes (like blaCTX-M-15) or carbapenemases (blaKPC-3) found solo without other narrow-spectrum beta-lactamases are associated with resistance to ampicillin, and therefore need rules specified for ampicillin and other penicillins
+amp_analysis$ppv_plot
+
+# define rules
+amp_rules <- makerules(amp_analysis)
+
+```
+
+For cephalosporin drugs we also need to consider all three classes, since many carbapenemases are expected to act on cephalosporins, and in principle any beta-lactamases can have some activity against cephalosporins that in combination with other markers may be clinically relevant. It is also important to define rules for beta-lactamases that do NOT confer resistance when found solo, so we can explicitly encode 'WT S' rules for these. The same logic applies for defining rules for carbapenems.
+
+```
+cef_analysis <- amrrules_analysis(geno_table=ecoli_afp_atb,
+                                    pheno_table=ecoli_ast_ebi, 
+                                    antibiotic="Ceftriaxone",
+                                    drug_class_list=c("Beta-lactams/penicillins", "Cephalosporins", "Carbapenems"),
+                                    sir_col="pheno_eucast", ecoff_col="ecoff",
+                                    species="Escherichia coli",
+                                    minPPV=1, mafLogReg=5, mafUpset=1,
+                                    info=info_obj)
+
+cef_rules <- makerules(cef_analysis)
+```
+
+### Supplying manual breakpoints
+If there are no clinical breakpoints, it may make sense to use the ECOFF as the breakpoint to define S/I/R. 
+
+For example, as noted above there are no breakpoints for azithromycin, but there is an MIC ECOFF (16 mg/L) that we can use instead to define rules.
+
+We could either do this by manually defining a phenotype column in our `pheno_table` input dataframe before running the analysis, or we can just supply the parameters `mic_S=16` and `mic_R=16` to the amrrules functions and this will be done automatically for us without modifying the input table.
+
+**Note** if you are supplying your own breakpoints you will need to modify the rules file to record the source of your breakpoints in the `breakpoint standard` field, as the default is to assume the breakpoints you've used are standard ones.
+```
+> getBreakpoints(species="Escherichia coli", guide="EUCAST 2025", antibiotic="Azithromycin")
+# A tibble: 0 × 14
+# ℹ 14 variables: guideline <chr>, type <chr>, host <chr>, method <chr>, site <chr>, mo <mo>, rank_index <dbl>, ab <ab>, ref_tbl <chr>, disk_dose <chr>,
+#   breakpoint_S <dbl>, breakpoint_R <dbl>, uti <lgl>, is_SDD <lgl>
+
+> getBreakpoints(species="Escherichia coli", guide="EUCAST 2025", antibiotic="Azithromycin", type_filter = "ECOFF")
+# A tibble: 1 × 14
+  guideline   type  host  method site  mo           rank_index ab   ref_tbl disk_dose breakpoint_S breakpoint_R uti   is_SDD
+  <chr>       <chr> <chr> <chr>  <chr> <mo>              <dbl> <ab> <chr>   <chr>            <dbl>        <dbl> <lgl> <lgl> 
+1 EUCAST 2025 ECOFF ECOFF MIC    NA    B_ESCHR_COLI          2 AZM  ECOFF   NA                  16           16 FALSE FALSE
+
+azi_analysis <- amrrules_analysis(geno_table=ecoli_afp_atb,
+                                    pheno_table=ecoli_ast_ebi, 
+                                    antibiotic="Azithromycin",
+                                    drug_class_list=c("Macrolides", "Macrolides/lincosamides"),
+                                    sir_col="pheno_eucast", ecoff_col="ecoff",
+                                    species="Escherichia coli",
+                                    minPPV=1, mafLogReg=5, mafUpset=1,
+                                    info=info_obj,
+                                    mic_S=16, mic_R=16) # manually specify breakpoints to define S/I/R 
+
+# note we need to set use_disk=FALSE otherwise the function will stop and tell us it can't find disk breakpoints
+azi_rules <- makerules(azi_analysis, mic_S=16, mic_R=16, use_disk=FALSE)
+
+# update the `breakpoint standard` field to record where the S/R breakpoints came from
+azi_rules$rules %>% mutate(`breakpoint standard`=if_else(`clinical category`!="-", "ECOFF 2025", "-"))
+```
