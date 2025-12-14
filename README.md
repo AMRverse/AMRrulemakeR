@@ -314,7 +314,8 @@ ecoli_ast_ebi %>% filter(drug_agent==as.ab("Ciprofloxacin")) %>% filter(!is.na(d
 
 # use the results of these analyses to define rules, then apply the rules back to the data to predict phenotypes
 # write out files and figures for the analysis, assay distributions, and predicted vs observed phenotypes
-cip_rules <- amrrules_save(cip_analysis, 
+cip_rules <- amrrules_save(cip_analysis,
+                           dir="amrrules",
                            bp_site="Non-meningitis",
                            ruleID_start=1,
                            use_mic=TRUE, use_disk=TRUE,
