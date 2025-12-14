@@ -577,8 +577,8 @@ compare_interpretations <- function(pred, obs, antibiotic, sir_col="pheno_eucast
   }
 
   ppv_bymethod <- safe_execute(predictive_value_by_var(true_vs_predict, sir_col=sir_col, ecoff_col=ecoff_col, var="type"))
-  dist_mic_bypred_bymethod <- safe_execute(pred_by_var(true_vs_predict %>% filter(!is.na(mic)), assay="mic"))
-  dist_disk_bypred_bymethod <- safe_execute(pred_by_var(true_vs_predict %>% filter(!is.na(disk)), assay="disk", var="type"))
+  dist_mic_bypred_bymethod <- safe_execute(pred_by_var(true_vs_predict %>% filter(!is.na(mic)), antibiotic, assay="mic", var="method"))
+  dist_disk_bypred_bymethod <- safe_execute(pred_by_var(true_vs_predict %>% filter(!is.na(disk)), antibiotic, assay="disk", var="method"))
 
   return(list(true_vs_predict=true_vs_predict,
          pred_ppv=ppv, pred_ppv_bymethod=ppv_bymethod,
@@ -639,13 +639,13 @@ predictive_value_by_var <- function(true_vs_predict, sir_col="pheno_eucast", eco
   sir_ppv_plot <- sir_ppv %>%
     ggplot(aes(fill=!!sym(sir_col), x=!!sym(var), y=n)) +
     geom_col(position="fill") + scale_fill_sir() + coord_flip() +
-    labs(fill="Observed", x="Predicted", y="Proportion", subtitle="Proportional") +
+    labs(fill="Observed", x="Assay method", y="Proportion", subtitle="Proportional") +
     geom_text(aes(label=paste0(sprintf("%1.1f", pct),"%")), position=position_fill(vjust=0.5)) +
     facet_wrap(~category, ncol=1)
   sir_ppv_n_plot <- sir_ppv %>%
     ggplot(aes(fill=!!sym(sir_col), x=!!sym(var), y=n)) +
     geom_col() + scale_fill_sir() + coord_flip() +
-    labs(fill="Observed", x="Predicted", y="Count", subtitle="Counts") +
+    labs(fill="Observed", x="Assay method", y="Count", subtitle="Counts") +
     facet_wrap(~category, ncol=1)
   test_sir_ppv_plot <- sir_ppv_n_plot + sir_ppv_plot +
     patchwork::plot_layout(guides="collect", axes="collect") +
@@ -658,13 +658,14 @@ predictive_value_by_var <- function(true_vs_predict, sir_col="pheno_eucast", eco
     arrange(phenotype)
   ecoff_ppv_plot <- ecoff_ppv %>%
     ggplot(aes(fill=!!sym(ecoff_col), x=!!sym(var), y=n)) +
-    geom_col(position="fill") + scale_fill_sir() + coord_flip() +labs(fill="Observed", x="Predicted", y="Proportion", subtitle="Proportional") +
+    geom_col(position="fill") + scale_fill_sir() + coord_flip() +
+    labs(fill="Observed", x="Assay method", y="Proportion", subtitle="Proportional") +
     geom_text(aes(label=paste0(sprintf("%1.1f", pct),"%")), position=position_fill(vjust=0.5)) +
     facet_wrap(~phenotype, ncol=1)
   ecoff_ppv_n_plot <- ecoff_ppv %>%
     ggplot(aes(fill=!!sym(ecoff_col), x=!!sym(var), y=n)) +
     geom_col() + scale_fill_sir() + coord_flip() +
-    labs(fill="Observed", x="Predicted", y="Count", subtitle="Counts") +
+    labs(fill="Observed", x="Assay method", y="Count", subtitle="Counts") +
     facet_wrap(~phenotype, ncol=1)
   test_ecoff_ppv_plot <- ecoff_ppv_n_plot + ecoff_ppv_plot +
     patchwork::plot_layout(guides="collect", axes="collect") +
@@ -674,7 +675,7 @@ predictive_value_by_var <- function(true_vs_predict, sir_col="pheno_eucast", eco
               table_ecoff=ecoff_ppv, plot_ecoff=test_ecoff_ppv_plot))
 }
 
-pred_by_var <- function(true_vs_predict, assay="mic", var="method") {
+pred_by_var <- function(true_vs_predict, antibiotic, assay="mic", var="method") {
   if (assay %in% assay & assay %in% colnames(true_vs_predict)) {
     true_vs_predict <- true_vs_predict %>%
       filter(!is.na(!!sym(assay))) %>%
@@ -683,7 +684,7 @@ pred_by_var <- function(true_vs_predict, assay="mic", var="method") {
       ggplot(aes(x=factor(!!sym(assay)), fill=category)) +
       geom_bar() + scale_fill_sir() +
       labs(x="Measure", y="count", fill="Predicted",
-           title=paste(antibiotic, "assay distributions for all samples"),
+           title=paste(ab_name(as.ab(antibiotic)), "assay distributions for all samples"),
            subtitle="coloured by predicted S/I/R") +
       theme(axis.text.x = element_text(angle = 60, vjust = 1, hjust = 1))
     if (true_vs_predict %>% filter(!is.na(get(var))) %>% nrow() > 0) {
@@ -693,7 +694,7 @@ pred_by_var <- function(true_vs_predict, assay="mic", var="method") {
       ggplot(aes(x=factor(!!sym(assay)), fill=phenotype)) +
       geom_bar() +
       labs(x="Measure", y="count", fill="Predicted (ECOFF)",
-           title=paste(antibiotic, "assay distributions for all samples"),
+           title=paste(ab_name(as.ab(antibiotic)), "assay distributions for all samples"),
            subtitle="coloured by predicted WT/NWT") +
       theme(axis.text.x = element_text(angle = 60, vjust = 1, hjust = 1)) +
       scale_fill_manual(values=c(wildtype="#3CAEA3", nonwildtype="#ED553B", `NA`="grey"))

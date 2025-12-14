@@ -67,7 +67,7 @@
 #'
 #' @export
 amrrules_analysis <- function(geno_table, pheno_table, antibiotic, drug_class_list, species,
-                               sir_col="pheno_eucast", ecoff_col="ecoff", sir_provided_col="pheno_provided",
+                              sir_col="pheno_eucast", ecoff_col="ecoff", sir_provided_col="pheno_provided",
                               geno_sample_col="Name", pheno_sample_col="id", marker_col="marker.label",
                               minPPV=1, mafLogReg=5, mafUpset=1, info=NULL, excludeRanges=TRUE, bp_site=NULL,
                               mic_S=NULL, mic_R=NULL, disk_S=NULL, disk_R=NULL,
@@ -230,7 +230,11 @@ amrrules_analysis <- function(geno_table, pheno_table, antibiotic, drug_class_li
               species=species,
               antibiotic=antibiotic,
               drug_class_list=drug_class_list,
+              sir_col=sir_col,
+              ecoff_col=ecoff_col,
               bp_site=bp_site,
+              geno_sample_col=geno_sample_col,
+              pheno_sample_col=pheno_sample_col,
               info=info,
               pheno_table_micdisk=pheno_table_micdisk,
               pheno_table=pheno_table,
@@ -262,6 +266,8 @@ amrrules_analysis <- function(geno_table, pheno_table, antibiotic, drug_class_li
 #' @param guide The guideline to use for breakpoints, when retrieving these from the AMR package. Default is `"EUCAST 2025"`.
 #' @param makeRules Logical indicating whether to use define AMR rules from the data provided. Default is `TRUE`.
 #' @param testRules Logical indicating whether to use test the rules by using them to interpret the genotypes as S/I/R and compare to the observed phenotypes. Default is `TRUE`.
+#' @param expected_R Logical indicating whether to manually enforce whether or not this drug is an expected 'R' for this species. If NULL, we will check if this species & drug is included in `AMR::intrinsic_resistant`.
+#' @param expected_I Logical indicating whether to manually enforce whether or not this drug should be reported as 'I' for this species. If NULL, we will check the S breakpoints and assume if this is set to 0.001 (MIC), or 50 (disk) this drug should always be reported as I not S.
 #'
 #' @return A data frame containing the generated AMR rules.
 #'
@@ -288,7 +294,7 @@ amrrules_save <- function(amrrules, width=9, height=9, dir_path, outdir_name=NUL
                           minObs=3, low_threshold=20, bp_site=NULL, ruleID_start=1000,
                           mic_S=NULL, mic_R=NULL, disk_S=NULL, disk_R=NULL,
                           use_mic=TRUE, use_disk=TRUE, guide="EUCAST 2025",
-                          makeRules=TRUE, testRules=TRUE) {
+                          makeRules=TRUE, testRules=TRUE, expected_R=NULL, expected_I=NULL) {
 
   if (is.null(outdir_name)) { outdir_name <- gsub("/","_",amrrules$antibiotic) }
   if (is.null(file_prefix)) { file_prefix <- gsub("/","_",amrrules$antibiotic) }
@@ -336,25 +342,13 @@ amrrules_save <- function(amrrules, width=9, height=9, dir_path, outdir_name=NUL
   if (!is.null(amrrules$logistic_plot_all)) {safe_execute(ggsave(amrrules$logistic_plot_all, filename=paste0(outpath,"_logistic_plot_all.pdf"), width=width, height=height))}
   if (!is.null(amrrules$ppv_logistic_plot_all)) {safe_execute(ggsave(amrrules$ppv_logistic_plot_all, filename=paste0(outpath,"_soloPPV_logistic_plot_all.pdf"), width=width*1.5, height=height))}
 
-  # prepare empty objects to return
-  # rules <- NULL
-  # test_vs_rules <- NULL
-  # true_vs_predict <- NULL
-  # sircall_compare_prop <- NULL
-  # test_sir_plot <- NULL
-  # ecoff_compare_prop <- NULL
-  # test_ecoff_plot <- NULL
-  # sir_by_method_plot <- NULL
-  # nwt_by_method_plot <- NULL
-  # mic_dist_vs_predictSIR <- NULL
-  # mic_dist_vs_predictNWT <- NULL
-
   # make rules and write them out to same directory
   if (makeRules) {
     cat ("\n")
     rules <- safe_execute(makerules(amrrules, minObs=minObs, low_threshold=low_threshold, bp_site=bp_site,
                                     ruleID_start=ruleID_start, mic_S=mic_S, mic_R=mic_R,
-                                    disk_S=disk_S, disk_R=disk_R, use_disk=use_disk, guide=guide))
+                                    disk_S=disk_S, disk_R=disk_R, use_disk=use_disk, guide=guide,
+                                    expected_R=expected_R, expected_I=expected_I))
     if (!is.null(rules)) {
       safe_execute(readr::write_tsv(rules$rules, file=paste0(outpath,"_AMRrules.tsv")))
       safe_execute(readr::write_tsv(rules$data, file=paste0(outpath,"_AMRrules_data.tsv")))
@@ -379,8 +373,12 @@ amrrules_save <- function(amrrules, width=9, height=9, dir_path, outdir_name=NUL
 
         if (!is.null(amrrules$pheno_table)) {
           cat (" Comparing phenotypes predicted from rules vs observed phenotypes\n")
-          compare_pred <- safe_execute(compare_interpretations(pred=test_vs_rules, obs=amrrules$pheno_table, antibiotic=antibiotic,
-                                                               sir_col=sir_col, ecoff_col=ecoff_col, var="method"))
+          compare_pred <- safe_execute(compare_interpretations(pred=test_vs_rules,
+                                                               obs=amrrules$pheno_table,
+                                                               antibiotic=amrrules$antibiotic,
+                                                               sir_col=sir_col,
+                                                               ecoff_col=ecoff_col,
+                                                               var="method"))
 
           safe_execute(readr::write_tsv(compare_pred$true_vs_predict, file=paste0(outpath,"_predictionsVsPhenotypeByMethod.tsv")))
           safe_execute(readr::write_tsv(compare_pred$pred_ppv$table_sir, file=paste0(outpath,"_predictionsVsCategory_summary.tsv")))
