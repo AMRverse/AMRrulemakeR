@@ -423,6 +423,7 @@ azi_analysis <- amrrules_analysis(geno_table=ecoli_afp_atb,
                                     mic_S=16, mic_R=16) # manually specify breakpoints to define S/I/R 
 
 # note we need to set use_disk=FALSE otherwise the function will stop and tell us it can't find disk breakpoints
+# and we need to set expected_R=FALSE, otherwise we assume it is expected R based on the EUCAST general guideline that Enterobacterales are expected resistant to macrolides
 azi_rules <- makerules(azi_analysis, mic_S=16, mic_R=16, use_disk=FALSE)
 
 # update the `breakpoint standard` field to record where the S/R breakpoints came from
