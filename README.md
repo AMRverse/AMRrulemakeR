@@ -77,7 +77,7 @@ cip_rules <- makerules(cip_analysis, bp_site="Non-meningitis")
 view(cip_rules$rules)
 
 # manually apply rules to interpret quinolone marker genotypes
-cip_test <- test_rules_amrfp(ecoli_afp_atb %>% filter(drug_class %in% c("Quinolones"),
+cip_test <- test_rules_amrfp(ecoli_afp_atb %>% filter(drug_class %in% c("Quinolones")),
                                  rules=cip_rules$rules, species="Escherichia coli")
 
 # compare these to the input phenotypes
