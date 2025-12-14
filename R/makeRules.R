@@ -24,6 +24,8 @@
 #' @param ruleID_start The starting ID number for generated rules. Default is 1000.
 #' @param note_prefix Prefix for the note describing the method used to create the rules. Default is `"Quantitative geno-pheno analysis by ESGEM-AMR WG"`.
 #' @param regression Logical indicating whether to consider logistic regression data (only used to define wildtype S for an individual marker, where the p-value exceeds 0.05 and odds ratio crosses 0, and there is no solo-marker data available). Default is `TRUE`.
+#' @param expected_R Logical indicating whether to manually enforce whether or not this drug is an expected 'R' for this species. If NULL, we will check if this species & drug is included in `AMR::intrinsic_resistant`.
+#' @param expected_I Logical indicating whether to manually enforce whether or not this drug should be reported as 'I' for this species. If NULL, we will check the S breakpoints and assume if this is set to 0.001 (MIC), or 50 (disk) this drug should always be reported as I not S.
 #'
 #' @return A list containing 2 data frames:
 #'   - `rules`: The draft rules in AMRrules format (spec v0.6), with some additional quantitative data fields to support review.
@@ -58,7 +60,7 @@ makerules <- function(amrrules, minObs=3, low_threshold=20, core_threshold=0.9,
                       use_disk=TRUE, disk_S=NULL, disk_R=NULL, disk_ecoff=NULL,
                       guide="EUCAST 2025", bp_site=NULL, rule_prefix=NULL, ruleID_start=1000,
                       note_prefix="Quantitative geno-pheno analysis by ESGEM-AMR WG",
-                      regression=TRUE) {
+                      regression=TRUE, expected_R=NULL, expected_I=NULL) {
 
   ## setup
 
@@ -175,16 +177,21 @@ makerules <- function(amrrules, minObs=3, low_threshold=20, core_threshold=0.9,
   if (is.null(bp_standard_disk)) {bp_standard_disk <- NA}
 
   # check if this drug is an expected R or I in this species
-  expected_R <- as.ab(antibiotic) %in% (AMR::intrinsic_resistant %>% filter(mo==as.mo(species)) %>% pull(ab))
-  if (expected_R) {cat(paste(" ",antibiotic,"is an expected resistance for",species,"\n"))}
-
-  expected_I <- FALSE
-  if(!expected_R) { # if expected I, the MIC S breakpoint is set to 0.001 (i.e. there is effectively no S category as all isolates exceed this value)
-    if (!is.null(mic_S)) {if (mic_S==0.001) {expected_I <- TRUE}}
-    if (!is.null(disk_S)) {if (disk_S==50) {expected_I <- TRUE}}
-  }
-  if (expected_I) {cat(paste(" ",antibiotic,"is an expected I for",species, "(there is no S category)\n"))}
-
+  # only check if parameters are null, otherwise accept what user has set
+  if (is.null(expected_R)) {
+    expected_R <- as.ab(antibiotic) %in% (AMR::intrinsic_resistant %>% filter(mo==as.mo(species)) %>% pull(ab))
+    if (expected_R) {cat(paste(" ",antibiotic,"is an expected resistance for",species,"\n"))}
+  } else if (expected_R) {cat("  User has specified this is not an expected R\n")
+  } else if (!expected_R) {cat("  User has specified this is not an expected R\n")}
+  if (is.null(expected_I)) {
+    expected_I <- FALSE
+    if(!expected_R) { # if expected I, the MIC S breakpoint is set to 0.001 (i.e. there is effectively no S category as all isolates exceed this value)
+      if (!is.null(mic_S)) {if (mic_S==0.001) {expected_I <- TRUE}}
+      if (!is.null(disk_S)) {if (disk_S==50) {expected_I <- TRUE}}
+    }
+    if (expected_I) {cat(paste(" ",antibiotic,"is an expected I for",species, "(there is no S category)\n"))}
+  } else if (expected_I) {cat("  User has specified this is not an expected I\n")
+  } else if (!expected_I) {cat("  User has specified this is not an expected I\n")}
 
   ## load quantitative data
 

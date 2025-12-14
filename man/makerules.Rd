@@ -22,7 +22,9 @@ makerules(
   rule_prefix = NULL,
   ruleID_start = 1000,
   note_prefix = "Quantitative geno-pheno analysis by ESGEM-AMR WG",
-  regression = TRUE
+  regression = TRUE,
+  expected_R = NULL,
+  expected_I = NULL
 )
 }
 \arguments{
@@ -61,6 +63,10 @@ makerules(
 \item{note_prefix}{Prefix for the note describing the method used to create the rules. Default is \code{"Quantitative geno-pheno analysis by ESGEM-AMR WG"}.}
 
 \item{regression}{Logical indicating whether to consider logistic regression data (only used to define wildtype S for an individual marker, where the p-value exceeds 0.05 and odds ratio crosses 0, and there is no solo-marker data available). Default is \code{TRUE}.}
+
+\item{expected_R}{Logical indicating whether to manually enforce whether or not this drug is an expected 'R' for this species. If NULL, we will check if this species & drug is included in \code{AMR::intrinsic_resistant}.}
+
+\item{expected_I}{Logical indicating whether to manually enforce whether or not this drug should be reported as 'I' for this species. If NULL, we will check the S breakpoints and assume if this is set to 0.001 (MIC), or 50 (disk) this drug should always be reported as I not S.}
 }
 \value{
 A list containing 2 data frames:

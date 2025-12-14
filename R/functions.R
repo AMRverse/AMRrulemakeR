@@ -490,7 +490,7 @@ compare_categories <- function(category_soloPPV, category_soloExtPPV, category_m
   category <- NA
   grade <- ""
   limitations <- list()
-  note <- list()
+  note <- list("")
   breakpoints_source <- list()
 
   if (!is.na(category_soloPPV)) {
@@ -660,4 +660,156 @@ checkMICranges <- function(geno_table, pheno_table, antibiotic, drug_class_list,
               plot=compare_solo_plot,
               table=compare_solo,
               soloPPV_micdisk=soloPPV_micdisk))
+}
+
+compare_interpretations <- function(pred, obs, antibiotic, sir_col="pheno_eucast", ecoff_col="ecoff", var="method") {
+  antibiotic <- as.ab(antibiotic)
+  obs <- obs %>% filter(!is.na(get(sir_col)) | !is.na(get(ecoff_col)))
+
+  if (antibiotic %in% as.ab(pred$drug)) {
+    pred <- pred %>% mutate(drug=as.ab(drug)) %>% filter(drug == antibiotic)
+  } else { stop(paste("Antibiotic", antibiotic, "not found in predictions input"))}
+  if (antibiotic %in% as.ab(obs$drug_agent)) {
+    obs <- obs %>% filter(drug_agent == antibiotic)
+  } else { stop(paste("Antibiotic", antibiotic, "not found in observations input"))}
+
+  true_vs_predict <- left_join(pred, obs, join_by("Name"=="id"))
+
+  ppv <- safe_execute(predictive_value(true_vs_predict, sir_col="pheno_eucast", ecoff_col="ecoff"))
+
+  true_vs_predict <- true_vs_predict %>%
+    mutate(type=case_when(!is.na(mic) ~ "mic", !is.na(disk) ~ "disk", TRUE ~ "SIRonly"))
+  if (var %in% colnames(true_vs_predict)) {
+    true_vs_predict <- true_vs_predict %>% mutate(type=paste(type, !!sym(var)))
+  }
+
+  ppv_bymethod <- safe_execute(predictive_value_by_var(true_vs_predict, sir_col="pheno_eucast", ecoff_col="ecoff", var="type"))
+  dist_mic_bypred_bymethod <- safe_execute(pred_by_var(true_vs_predict %>% filter(!is.na(mic)), assay="mic"))
+  dist_disk_bypred_bymethod <- safe_execute(pred_by_var(true_vs_predict %>% filter(!is.na(disk)), assay="disk", var="type"))
+
+  return(list(true_vs_predict=true_vs_predict,
+         pred_ppv=ppv, pred_ppv_bymethod=ppv_bymethod,
+         dist_mic_bypred_bymethod=dist_mic_bypred_bymethod,
+         dist_disk_bypred_bymethod=dist_disk_bypred_bymethod))
+}
+
+predictive_value <- function(true_vs_predict, sir_col="pheno_eucast", ecoff_col="ecoff") {
+    sir_ppv <- true_vs_predict %>%
+      filter(!!sym(sir_col) %in% c("S", "I", "R")) %>%
+      count(!!sym(sir_col), category) %>%
+      group_by(category) %>% mutate(pct= prop.table(n) * 100) %>%
+      mutate(category=as.sir(category)) %>% arrange(category) %>%
+      group_by(category) %>% mutate(total=sum(n)) %>%
+      mutate(pred=paste0(category, " (n=",total,")"))
+    sir_ppv_plot <- sir_ppv %>%
+      ggplot(aes(fill=!!sym(sir_col), x=pred, y=n)) +
+      geom_col(position="fill") + scale_fill_sir() + coord_flip() +
+      labs(fill="Observed", x="Predicted", y="Proportion", subtitle="Proportional") +
+      geom_text(aes(label=paste0(sprintf("%1.1f", pct),"%")), position=position_fill(vjust=0.5))
+    sir_ppv_n_plot <- sir_ppv %>%
+      ggplot(aes(fill=!!sym(sir_col), x=pred, y=n)) +
+      geom_col() + scale_fill_sir() + coord_flip() +
+      labs(fill="Observed", x="Predicted", y="Count", subtitle="Counts")
+    test_sir_ppv_plot <- sir_ppv_n_plot + sir_ppv_plot +
+      patchwork::plot_layout(guides="collect", axes="collect") +
+      patchwork::plot_annotation("Predicted vs observed (S/I/R calls)")
+
+    ecoff_ppv <- true_vs_predict %>%
+      filter(!!sym(ecoff_col) %in% c("S", "R")) %>%
+      count(!!sym(ecoff_col), phenotype) %>%
+      group_by(phenotype) %>% mutate(pct= prop.table(n) * 100) %>%
+      arrange(phenotype) %>%
+      group_by(phenotype) %>% mutate(total=sum(n)) %>%
+      mutate(pred=paste0(phenotype, " (n=",total,")"))
+    ecoff_ppv_plot <- ecoff_ppv %>%
+      ggplot(aes(fill=!!sym(ecoff_col), x=pred, y=n)) +
+      geom_col(position="fill") + scale_fill_sir() + coord_flip() +labs(fill="Observed", x="Predicted", y="Proportion", subtitle="Proportional") +
+      geom_text(aes(label=paste0(sprintf("%1.1f", pct),"%")), position=position_fill(vjust=0.5))
+    ecoff_ppv_n_plot <- ecoff_ppv %>%
+      ggplot(aes(fill=!!sym(ecoff_col), x=pred, y=n)) +
+      geom_col() + scale_fill_sir() + coord_flip() +
+      labs(fill="Observed", x="Predicted", y="Count", subtitle="Counts")
+    test_ecoff_ppv_plot <- ecoff_ppv_n_plot + ecoff_ppv_plot +
+      patchwork::plot_layout(guides="collect", axes="collect") +
+      patchwork::plot_annotation("Predicted vs observed (ECOFF calls)")
+
+    return(list(table_sir=sir_ppv, plot_sir=test_sir_ppv_plot,
+                table_ecoff=ecoff_ppv, plot_ecoff=test_ecoff_ppv_plot))
+}
+
+predictive_value_by_var <- function(true_vs_predict, sir_col="pheno_eucast", ecoff_col="ecoff", var="method") {
+  sir_ppv <- true_vs_predict %>%
+    filter(!!sym(sir_col) %in% c("S", "I", "R")) %>%
+    count(!!sym(sir_col), category, !!sym(var)) %>%
+    group_by(category, !!sym(var)) %>% mutate(pct= prop.table(n) * 100) %>%
+    mutate(category=as.sir(category)) %>% arrange(category)
+  sir_ppv_plot <- sir_ppv %>%
+    ggplot(aes(fill=!!sym(sir_col), x=!!sym(var), y=n)) +
+    geom_col(position="fill") + scale_fill_sir() + coord_flip() +
+    labs(fill="Observed", x="Predicted", y="Proportion", subtitle="Proportional") +
+    geom_text(aes(label=paste0(sprintf("%1.1f", pct),"%")), position=position_fill(vjust=0.5)) +
+    facet_wrap(~category, ncol=1)
+  sir_ppv_n_plot <- sir_ppv %>%
+    ggplot(aes(fill=!!sym(sir_col), x=!!sym(var), y=n)) +
+    geom_col() + scale_fill_sir() + coord_flip() +
+    labs(fill="Observed", x="Predicted", y="Count", subtitle="Counts") +
+    facet_wrap(~category, ncol=1)
+  test_sir_ppv_plot <- sir_ppv_n_plot + sir_ppv_plot +
+    patchwork::plot_layout(guides="collect", axes="collect") +
+    patchwork::plot_annotation("Predicted vs observed (S/I/R calls), by method")
+
+  ecoff_ppv <- true_vs_predict %>%
+    filter(!!sym(ecoff_col) %in% c("S", "R")) %>%
+    count(!!sym(ecoff_col), phenotype, !!sym(var)) %>%
+    group_by(phenotype, !!sym(var)) %>% mutate(pct= prop.table(n) * 100) %>%
+    arrange(phenotype)
+  ecoff_ppv_plot <- ecoff_ppv %>%
+    ggplot(aes(fill=!!sym(ecoff_col), x=!!sym(var), y=n)) +
+    geom_col(position="fill") + scale_fill_sir() + coord_flip() +labs(fill="Observed", x="Predicted", y="Proportion", subtitle="Proportional") +
+    geom_text(aes(label=paste0(sprintf("%1.1f", pct),"%")), position=position_fill(vjust=0.5)) +
+    facet_wrap(~phenotype, ncol=1)
+  ecoff_ppv_n_plot <- ecoff_ppv %>%
+    ggplot(aes(fill=!!sym(ecoff_col), x=!!sym(var), y=n)) +
+    geom_col() + scale_fill_sir() + coord_flip() +
+    labs(fill="Observed", x="Predicted", y="Count", subtitle="Counts") +
+    facet_wrap(~phenotype, ncol=1)
+  test_ecoff_ppv_plot <- ecoff_ppv_n_plot + ecoff_ppv_plot +
+    patchwork::plot_layout(guides="collect", axes="collect") +
+    patchwork::plot_annotation("Predicted vs observed (ECOFF calls), by method")
+
+  return(list(table_sir=sir_ppv, plot_sir=test_sir_ppv_plot,
+              table_ecoff=ecoff_ppv, plot_ecoff=test_ecoff_ppv_plot))
+}
+
+pred_by_var <- function(true_vs_predict, assay="mic", var="method") {
+  if (assay %in% assay & assay %in% colnames(true_vs_predict)) {
+    true_vs_predict <- true_vs_predict %>%
+      filter(!is.na(!!sym(assay))) %>%
+      mutate(category=as.sir(category))
+    pred <- true_vs_predict %>%
+      ggplot(aes(x=factor(!!sym(assay)), fill=category)) +
+      geom_bar() + scale_fill_sir() +
+      labs(x="Measure", y="count", fill="Predicted",
+           title=paste(antibiotic, "assay distributions for all samples"),
+           subtitle="coloured by predicted S/I/R") +
+      theme(axis.text.x = element_text(angle = 60, vjust = 1, hjust = 1))
+    if (true_vs_predict %>% filter(!is.na(get(var))) %>% nrow() > 0) {
+      pred <- pred + facet_wrap(~get(var), ncol=1, scales="free_y")
+    }
+    pred_ecoff <- true_vs_predict %>%
+      ggplot(aes(x=factor(!!sym(assay)), fill=phenotype)) +
+      geom_bar() +
+      labs(x="Measure", y="count", fill="Predicted (ECOFF)",
+           title=paste(antibiotic, "assay distributions for all samples"),
+           subtitle="coloured by predicted WT/NWT") +
+      theme(axis.text.x = element_text(angle = 60, vjust = 1, hjust = 1)) +
+      scale_fill_manual(values=c(wildtype="#3CAEA3", nonwildtype="#ED553B", `NA`="grey"))
+    if (true_vs_predict %>% filter(!is.na(get(var))) %>% nrow() > 0) {
+      pred_ecoff <- pred_ecoff + facet_wrap(~get(var), ncol=1, scales="free_y")
+    }
+  } else {
+    pred <- NULL
+    pred_ecoff <- NULL
+  }
+  return(list(pred=pred, pred_ecoff=pred_ecoff))
 }
