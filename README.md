@@ -90,6 +90,15 @@ compare_pred <- compare_interpretations(pred=cip_test, obs=ecoli_ast_ebi,
                                         sir_col="pheno_eucast", ecoff_col="ecoff",
                                         var="method")
 
+# check positive predictive value of rules
+compare_pred$pred_ppv$plot_sir
+
+# check positive predictive value of rules, stratified by assay method
+compare_pred$pred_ppv_bymethod$plot_sir
+
+# review MIC distribution, stratified by assay method and coloured by prediction
+compare_pred$dist_mic_bypred_bymethod$pred
+
 ```
 
 # Work in progress - suggested protocol for developing AMRrules using this package
@@ -201,7 +210,7 @@ Notes:
 ### Examples
 
 ```
-# process AMRfp genotype data from Allthebacteria
+# process AMRfp genotype data from Allthebacteria (this input file is not distributed with the AMRrulemakeR package)
 
 # import AMRfp results file for E. coli
 afp <-read_tsv("ATB_AFP_Ecoli_AMR.tsv.gz")
@@ -283,7 +292,7 @@ ecoli_ast_ebi %>% filter(drug_agent==as.ab("Ciprofloxacin") & method=="BD Phoeni
 6 >16.0   R              1
 ```
 
-This highlights that a lot of the automated platforms report MIC data as capped ranges (values highlighted in red). Many of these are still interpretable against the breakpoints, but most of the BD Phoenix data is recorded as '<=0.5', which can't be interpreted against the breakpoints S <=0.25, R >0.5, ECOFF 0.064. These values won't be used in the AMRrules analysis.
+This highlights that a lot of the automated platforms report MIC data as capped ranges (values highlighted in red). Many of these are still interpretable against the breakpoints, but most of the BD Phoenix data is recorded as '<=0.5', which can't be interpreted against the breakpoints S <=0.25, R >0.5, ECOFF 0.064. These values won't be used in the AMRrules analysis as they are not interpretable (NI).
 
 ## Run analyses need to define rules
 The function `amrrules_analysis()` takes our phenotype table and extracts the data for a specified drug; then takes our genotype table and extracts the data for the relevant markers; and compares these geno/pheno data using several different `AMRgen` functions.
@@ -314,10 +323,10 @@ cip_analysis <- amrrules_analysis(geno_table=ecoli_afp_atb,
 cip_analysis$ppv_plot
 cip_analysis$ppv_plot_all # this includes data with S/I/R interpretations from EBI but no raw assay values (treated as the 'extended' dataset in the analysis)
 cip_analysis$logistic_plot # note this is only used if the marker is not found solo, to support a call of WT S based on lack of association with resistance in the regression
-cip_analysis$logistic_plot_all
 cip_analysis$upset_mic_plot
-cip_analysis$upset_disk_plot # note this has very litte information content as there is very limited public disk data for ciprofloxacin (n=240)
 
+# note this has very litte information content as there is very limited public disk data for ciprofloxacin (n=240)
+cip_analysis$upset_disk_plot 
 ecoli_ast_ebi %>% filter(drug_agent==as.ab("Ciprofloxacin")) %>% filter(!is.na(disk))
 
 # use the results of these analyses to define rules, then apply the rules back to the data to predict phenotypes
@@ -329,18 +338,12 @@ cip_rules <- amrrules_save(cip_analysis,
                            use_mic=TRUE, use_disk=TRUE,
                            file_prefix="Ciprofloxacin")
 
-# alternatively, call makerules directly on the analysis object without saving outputs or running predictions
-cip_rules <- makerules(cip_analysis, bp_site="Non-meningitis")
-
 # view the proposed rules, in AMRrules specification format, with quantitative fields added
 view(cip_rules$rules)
 
-# manually apply rules to interpret quinolone marker genotypes
-cip_test <- test_rules_amrfp(ecoli_afp_atb %>% filter(drug_class %in% c("Quinolones"),
-                                 rules=cip_rules$rules, species="Escherichia coli")
-
-# compare these to the input phenotypes
-cip_test %>% left_join(ecoli_ast_ebi, join_by("Name"=="id")) %>% count(category,pheno_eucast)
+# check the positive predictive value of the rules for interpreting the input genotypes
+cip_rules$predict_vs_obs_stats$plot_sir             # alldata
+cip_rules$predict_vs_obs_stats_byMethod$plot_sir    # stratified by assay method
 ```
 
 ### Examples with markers for multiple drug classes
@@ -363,11 +366,18 @@ trimsulfa_analysis$ppv_plot
 trimsulfa_analysis$upset_mic_plot
 trimsulfa_analysis$upset_disk_plot
 
-# define rules
-trimsulfa_rules <- makerules(trimsulfa_analysis)
+# define rules and assess them
+trimsulfa_rules <- amrrules_save(trimsulfa_analysis,
+                           dir="amrrules",
+                           file_prefix="TrimSulfa")
+
+view(trimsulfa_rules$rules)
+trimsulfa_rules$predict_vs_obs_stats$plot_sir
+trimsulfa_rules$predict_vs_obs_stats_byMethod$plot_sir
 ```
 
 **Beta-lactam antibiotics:** Beta-lactamases classified as cephalosporinases (class 'Cephalosporins' in NCBI refgene) have activity against narrow-spectrum beta-lactam drugs (such as ampicillin) as well as cephalosporins. Beta-lactamases classified as carbapenemases (class 'Carbapenems' in NCBI refgene) also have activity against narrow-spectrum beta-lactam drugs and cephalosporins as well as carbapenems. So to analyse geno-pheno relationships for beta-lactam drugs like ampicillin, we need to consider all three classes of markers in AMRfinderplus output that have activity against beta-lactams: `drug_class_list=c("Beta-lactams/penicillins", "Cephalosporins", "Carbapenems")`. 
+(Note the ecoli_afp_atb example genotypes have already had blaEC calls removed, as this a core gene that doesn't contribute to resistance.)
 ```
 amp_analysis <- amrrules_analysis(geno_table=ecoli_afp_atb,
                                     pheno_table=ecoli_ast_ebi, 
@@ -381,8 +391,14 @@ amp_analysis <- amrrules_analysis(geno_table=ecoli_afp_atb,
 # the solo PPV plot confirms that, as expected, ESBL genes (like blaCTX-M-15) or carbapenemases (blaKPC-3) found solo without other narrow-spectrum beta-lactamases are associated with resistance to ampicillin, and therefore need rules specified for ampicillin and other penicillins
 amp_analysis$ppv_plot
 
-# define rules
-amp_rules <- makerules(amp_analysis)
+# define rules and assess them
+amp_rules <- amrrules_save(amp_analysis,
+                           dir="amrrules",
+                           file_prefix="Ampicillin")
+
+view(amp_rules$rules)
+amp_rules$predict_vs_obs_stats$plot_sir
+amp_rules$predict_vs_obs_stats_byMethod$plot_sir
 
 ```
 
@@ -397,8 +413,14 @@ cef_analysis <- amrrules_analysis(geno_table=ecoli_afp_atb,
                                     species="Escherichia coli",
                                     minPPV=1, mafLogReg=5, mafUpset=1,
                                     info=info_obj)
+# define rules and assess them
+cef_rules <- amrrules_save(cef_analysis,
+                           dir="amrrules",
+                           file_prefix="Ceftriaxone")
 
-cef_rules <- makerules(cef_analysis)
+view(cef_rules$rules)
+cef_rules$predict_vs_obs_stats$plot_sir
+cef_rules$predict_vs_obs_stats_byMethod$plot_sir
 ```
 
 ### Supplying manual breakpoints
@@ -429,12 +451,24 @@ azi_analysis <- amrrules_analysis(geno_table=ecoli_afp_atb,
                                     species="Escherichia coli",
                                     minPPV=1, mafLogReg=5, mafUpset=1,
                                     info=info_obj,
-                                    mic_S=16, mic_R=16) # manually specify breakpoints to define S/I/R 
+                                    mic_S=16, mic_R=16) # manually specify breakpoints to define S/I/R
 
 # note we need to set use_disk=FALSE otherwise the function will stop and tell us it can't find disk breakpoints
 # and we need to set expected_R=FALSE, otherwise we assume it is expected R based on the EUCAST general guideline that Enterobacterales are expected resistant to macrolides
-azi_rules <- makerules(azi_analysis, mic_S=16, mic_R=16, use_disk=FALSE)
+azi_rules <- amrrules_save(azi_analysis,
+                           dir="amrrules",
+                           file_prefix="Azithromycin",
+                           mic_S=16, mic_R=16,
+                           use_disk=FALSE,
+                           expected_R=FALSE)
 
 # update the `breakpoint standard` field to record where the S/R breakpoints came from
-azi_rules$rules %>% mutate(`breakpoint standard`=if_else(`clinical category`!="-", "ECOFF 2025", "-"))
+azi_rules$rules <- azi_rules$rules %>% mutate(`breakpoint standard`=if_else(`clinical category`!="-", "ECOFF 2025", "-"))
+
+view(azi_rules$rules)
+
+# compare predictions vs observed ECOFF calls
+azi_rules$predict_vs_obs_stats$plot_ecoff
+azi_rules$predict_vs_obs_stats_byMethod$plot_ecoff
+azi_rules$predict_vs_mic_dist_byMethod$pred_ecoff
 ```
