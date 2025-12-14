@@ -88,7 +88,7 @@ cip_test %>% left_join(ecoli_ast_ebi, join_by("Name"=="id")) %>% count(category,
 compare_pred <- compare_interpretations(pred=cip_test, obs=ecoli_ast_ebi,
                                         antibiotic="Ciprofloxacin",
                                         sir_col="pheno_eucast", ecoff_col="ecoff",
-                                        var="method"))
+                                        var="method")
 
 ```
 
