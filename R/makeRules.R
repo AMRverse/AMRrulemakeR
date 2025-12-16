@@ -477,13 +477,22 @@ makerules <- function(amrrules, minObs=3, low_threshold=20, core_threshold=0.9,
 
   ## clean up rule fields and notes
 
-  # gene info
+  # get pubmed IDs from refgene
+  genus <- unlist(str_split(amrrules$species, " "))[1]
+  pubmed <- refgene_pubmed %>%
+    mutate(`Gene symbol`= if_else(!is.na(allele), allele, gene_family)) %>%
+    filter(whitelisted_taxa==amrrules$species | whitelisted_taxa==genus | is.na(whitelisted_taxa)) %>%
+    select(`Gene symbol`, pubmed_reference) %>%
+    rename(PMID=pubmed_reference)
+
+  # gene info for this species
   gene_info <- amrrules$afp_hits %>%
+    left_join(pubmed, by="Gene symbol") %>%
     #mutate(context=if_else(freq>core_threshold, "core", "accessory")) %>% # need to review wrt manual rules and hierarchy
     mutate(mutation=if_else(is.na(mutation), "-", mutation)) %>%
     mutate(marker=as.character(marker.label)) %>% # to match HGVS formatted labels in the input stats
     ungroup() %>%
-    select(marker, freq, freq_n, mutation, node, `variation type`) %>% # exclude context
+    select(marker, freq, freq_n, mutation, node, `variation type`, PMID) %>% # exclude context
     distinct()
 
   # clean up fields as per AMRrules spec v0.6
@@ -558,12 +567,19 @@ makerules <- function(amrrules, minObs=3, low_threshold=20, core_threshold=0.9,
                                phenotype=="NWT" ~ "nonwildtype",
                                TRUE ~ NA))
 
+  if (!is.null(bp_site)) {
+    data <- data %>% mutate(`breakpoint condition` = if_else(breakpoint!="", bp_site, "-"))
+  } else{ data$`breakpoint condition`="-"}
+
   rules <- data %>%
     mutate(date_stamp=format(Sys.time(), "%Y-%m-%d %H:%M:%S")) %>%
     mutate(`evidence code`=if_else(!is.na(`clinical category`), "ECO:0001103 natural variation mutant evidence", "")) %>%
-    select(ruleID, organism, gene, node, mutation, `variation type`,
-           drug, phenotype, `clinical category`,
-           breakpoint, `breakpoint standard`, ecoff, `ecoff standard`,
+    mutate(`gene context` = "acquired") %>% # assume for now, could check frequency to confirm core genes, but need to merge nodes
+    mutate(`drug class` = "-") %>%
+    select(ruleID, organism, gene, node, mutation, `variation type`, `gene context`,
+           drug, `drug class`, phenotype, `clinical category`,
+           breakpoint, `breakpoint standard`, `breakpoint condition`,
+           ecoff, `ecoff standard`, PMID,
            `evidence code`, `evidence grade`, `evidence limitations`,
            `rule curation note`, date_stamp,
            # quantitative data columns, not part of rule spec:

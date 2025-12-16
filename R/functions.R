@@ -545,7 +545,7 @@ checkMICranges <- function(geno_table, pheno_table, antibiotic, drug_class_list,
   marker_count <- soloPPV_micdisk$amr_binary %>% select(-any_of(c("id", "pheno", "ecoff", "mic", "disk", "R", "I", "NWT"))) %>% rowSums()
   marker_free_strains <- soloPPV_micdisk$amr_binary$id[marker_count==0]
 
-  mic_dist <- assay_by_var(pheno_table=pheno_table_micdisk, antibiotic=antibiotic, measure="mic", var="method",
+  mic_dist <- assay_by_var(pheno_table=pheno_table_micdisk, antibiotic=antibiotic, measure="mic", facet_var="method",
                            species=species, marker_free_strains=marker_free_strains, bp_site=bp_site)
 
   return(list(mic_plot_nomarkers=mic_dist$plot_nomarkers,

@@ -84,6 +84,16 @@ amrrules_analysis <- function(geno_table, pheno_table, antibiotic, drug_class_li
   reference_disk <- safe_execute(rep(reference_disk$disk_diffusion, reference_disk$count))
   reference_disk_plot <- safe_execute(ggplot2::autoplot(reference_disk, ab = antibiotic, mo = species, title = "EUCAST reference disk zone distribtion"))
 
+  input_mic_sir_plot <- safe_execute(AMRgen::assay_by_var(pheno_table, antibiotic, measure="mic", facet_var="method",
+                                  species=species, bp_site=bp_site, colour_by=sir_col))
+  input_mic_nwt_plot <- safe_execute(AMRgen::assay_by_var(pheno_table, antibiotic, measure="mic", facet_var="method",
+                                                          species=species, bp_site=bp_site, colour_by=ecoff_col))
+
+  input_disk_sir_plot <- safe_execute(AMRgen::assay_by_var(pheno_table, antibiotic, measure="disk", facet_var="method",
+                                                          species=species, bp_site=bp_site, colour_by=sir_col))
+  input_disk_nwt_plot <- safe_execute(AMRgen::assay_by_var(pheno_table, antibiotic, measure="disk", facet_var="method",
+                                                          species=species, bp_site=bp_site, colour_by=ecoff_col))
+
   ### TO DO: improve this
   #summary <- safe_execute(summarise_data(geno_table, pheno_table, antibiotic=antibiotic, drug_class_list=drug_class_list, geno_sample_col=geno_sample_col, pheno_sample_col=pheno_sample_col, species=species))
 
@@ -200,6 +210,10 @@ amrrules_analysis <- function(geno_table, pheno_table, antibiotic, drug_class_li
               reference_disk_plot=reference_disk_plot,
               reference_mic=reference_mic,
               reference_disk=reference_disk,
+              input_mic_sir_plot=input_mic_sir_plot,
+              input_mic_nwt_plot=input_mic_nwt_plot,
+              input_disk_sir_plot=input_disk_sir_plot,
+              input_disk_nwt_plot=input_disk_nwt_plot,
               solo_stats=soloPPV_micdisk$solo_stats,
               solo_binary=soloPPV_micdisk$solo_binary,
               amr_binary=soloPPV_micdisk$amr_binary,
@@ -299,48 +313,77 @@ amrrules_save <- function(amrrules, width=9, height=9, dir_path, outdir_name=NUL
   if (is.null(outdir_name)) { outdir_name <- gsub("/","_",amrrules$antibiotic) }
   if (is.null(file_prefix)) { file_prefix <- gsub("/","_",amrrules$antibiotic) }
 
+  # main directory
   outdir_path <- file.path(dir_path, outdir_name)
   if (!dir.exists(outdir_path)) {
     safe_execute(dir.create(outdir_path, recursive=TRUE))
     cat(paste0("Directory '", outdir_path, "' created successfully.\n"))
   }
+  outpath_main <- file.path(outdir_path, file_prefix)
 
-  outpath <- file.path(outdir_path, file_prefix)
+  cat(paste0("\nWriting figs and tables to ", outpath_main,"*\n"))
 
-  cat(paste0("\nWriting figs and tables to ", outpath,"_*\n"))
+  # reference distributions
+  # subdirectory distributions/
+  outdir_path_dist <- file.path(dir_path, outdir_name, "distributions")
+  if (!dir.exists(outdir_path_dist)) {
+    safe_execute(dir.create(outdir_path_dist, recursive=TRUE))
+  }
+  outpath_dist <- file.path(outdir_path_dist, file_prefix)
 
-  if (!is.null(amrrules$reference_mic_plot)) {safe_execute(ggsave(amrrules$reference_mic_plot, filename=paste0(outpath,"_reference_mic_plot.pdf"), width=width, height=height))}
-  if (!is.null(amrrules$reference_disk_plot)) {safe_execute(ggsave(amrrules$reference_disk_plot, filename=paste0(outpath,"_reference_disk_plot.pdf"), width=width, height=height))}
-
-  if (!is.null(amrrules$ppv_plot)) {safe_execute(ggsave(amrrules$ppv_plot, filename=paste0(outpath,"_soloPPV_plot.pdf"), width=width, height=height))}
-  if (!is.null(amrrules$logistic_plot)) {safe_execute(ggsave(amrrules$logistic_plot, filename=paste0(outpath,"_logistic_plot.pdf"), width=width, height=height))}
-  if (!is.null(amrrules$ppv_logistic_plot)) {safe_execute(ggsave(amrrules$ppv_logistic_plot, filename=paste0(outpath,"_soloPPV_logistic_plot.pdf"), width=width*1.5, height=height))}
-  if (!is.null(amrrules$upset_mic_plot)) {safe_execute(ggsave(amrrules$upset_mic_plot, filename=paste0(outpath,"_MIC_upset_plot.pdf"), width=width*1.5, height=height))}
-  if (!is.null(amrrules$upset_disk_plot)) {safe_execute(ggsave(amrrules$upset_disk_plot, filename=paste0(outpath,"_disk_upset_plot.pdf"), width=width*1.5, height=height))}
-
-  if (!is.null(amrrules$mic_plot_nomarkers)) {safe_execute(ggsave(amrrules$mic_plot_nomarkers, filename=paste0(outpath,"_mic_dist_method_nomarkers.pdf"), width=width, height=height))}
-  if (!is.null(amrrules$mic_plot_all)) {safe_execute(ggsave(amrrules$mic_plot_all, filename=paste0(outpath,"_mic_dist_method_all.pdf"), width=width, height=height))}
-  if (!is.null(amrrules$compare_solo_plot)) {safe_execute(ggsave(amrrules$compare_solo_plot, filename=paste0(outpath,"_compare_ranges_solo_plot.pdf"), width=width, height=height))}
+  # write out reference and observed distributions
+  if (!is.null(amrrules$reference_mic_plot)) {safe_execute(ggsave(amrrules$reference_mic_plot, filename=paste0(outpath_dist,"_reference_mic_plot.pdf"), width=width, height=height))}
+  if (!is.null(amrrules$reference_disk_plot)) {safe_execute(ggsave(amrrules$reference_disk_plot, filename=paste0(outpath_dist,"_reference_disk_plot.pdf"), width=width, height=height))}
+  if (!is.null(amrrules$input_mic_sir_plot$plot)) {safe_execute(ggsave(amrrules$input_mic_sir_plot$plot, filename=paste0(outpath_dist,"_inputMIC_bySIR_byMethod.pdf"), width=width, height=height))}
+  if (!is.null(amrrules$input_mic_nwt_plot$plot)) {safe_execute(ggsave(amrrules$input_mic_nwt_plot$plot, filename=paste0(outpath_dist,"_inputMIC_byNWT_byMethod.pdf"), width=width, height=height))}
+  if (!is.null(amrrules$input_disk_sir_plot$plot)) {safe_execute(ggsave(amrrules$input_disk_sir_plot$plot, filename=paste0(outpath_dist,"_inputDisk_bySIR_byMethod.pdf"), width=width, height=height))}
+  if (!is.null(amrrules$input_disk_nwt_plot$plot)) {safe_execute(ggsave(amrrules$input_disk_nwt_plot$plot, filename=paste0(outpath_dist,"_inputDisk_byNWT_byMethod.pdf"), width=width, height=height))}
 
 
-  #safe_execute(readr::write_tsv(as.data.frame(amrrules$summary), col_names=F, file=paste0(outpath,"_data_summary.tsv")))
-  safe_execute(readr::write_tsv(amrrules$modelR, file=paste0(outpath,"_model_R.tsv")))
-  safe_execute(readr::write_tsv(amrrules$modelNWT, file=paste0(outpath,"_model_NWT.tsv")))
-  safe_execute(readr::write_tsv(amrrules$solo_stats, file=paste0(outpath,"_soloPPV.tsv")))
-  safe_execute(readr::write_tsv(amrrules$compare_solo_table, file=paste0(outpath,"_soloPPV_compareWithoutRanges.tsv")))
+  # subdirectory ppv/
+  outdir_path_ppv <- file.path(dir_path, outdir_name, "ppv")
+  if (!dir.exists(outdir_path_ppv)) {
+    safe_execute(dir.create(outdir_path_ppv, recursive=TRUE))
+  }
+  outpath_ppv <- file.path(outdir_path_ppv, file_prefix)
 
-  if (!is.null(amrrules$upset_mic_summary)) {safe_execute(readr::write_tsv(amrrules$upset_mic_summary, file=paste0(outpath,"_MIC_summary.tsv")))}
+  safe_execute(readr::write_tsv(amrrules$solo_stats, file=paste0(outpath_ppv,"_soloPPV.tsv")))
+  if (!is.null(amrrules$ppv_plot)) {safe_execute(ggsave(amrrules$ppv_plot, filename=paste0(outpath_ppv,"_soloPPV.pdf"), width=width, height=height))}
+  if (!is.null(amrrules$ppv_logistic_plot)) {safe_execute(ggsave(amrrules$ppv_logistic_plot, filename=paste0(outpath_ppv,"_soloPPV_logistic.pdf"), width=width*1.5, height=height))}
+  safe_execute(readr::write_tsv(amrrules$solo_stats_all, file=paste0(outpath_ppv,"_soloPPV_ext.tsv")))
+  if (!is.null(amrrules$ppv_plot_all)) {safe_execute(ggsave(amrrules$ppv_plot_all, filename=paste0(outpath_ppv,"_soloPPV_ext.pdf"), width=width, height=height))}
+
+  if (!is.null(amrrules$upset_mic_plot)) {safe_execute(ggsave(amrrules$upset_mic_plot, filename=paste0(outpath_ppv,"_MIC_upset.pdf"), width=width*1.5, height=height))}
+  if (!is.null(amrrules$upset_mic_summary)) {safe_execute(readr::write_tsv(amrrules$upset_mic_summary, file=paste0(outpath_ppv,"_MIC_summary.tsv")))}
   else {cat ("  (No MIC data summary available to write)\n")}
-  if (!is.null(amrrules$upset_disk_summary)) {safe_execute(readr::write_tsv(amrrules$upset_disk_summary, file=paste0(outpath,"_DD_summary.tsv")))}
+
+  if (!is.null(amrrules$upset_disk_plot)) {safe_execute(ggsave(amrrules$upset_disk_plot, filename=paste0(outpath_ppv,"_disk_upset.pdf"), width=width*1.5, height=height))}
+  if (!is.null(amrrules$upset_disk_summary)) {safe_execute(readr::write_tsv(amrrules$upset_disk_summary, file=paste0(outpath_ppv,"_disk_summary.tsv")))}
   else {cat ("  (No disk diffusion data summary available to write)\n")}
 
-  safe_execute(readr::write_tsv(amrrules$modelR_all, file=paste0(outpath,"_model_R_all.tsv")))
-  safe_execute(readr::write_tsv(amrrules$modelNWT_all, file=paste0(outpath,"_model_NWT_all.tsv")))
-  safe_execute(readr::write_tsv(amrrules$solo_stats_all, file=paste0(outpath,"_soloPPV_all.tsv")))
 
-  if (!is.null(amrrules$ppv_plot_all)) {safe_execute(ggsave(amrrules$ppv_plot_all, filename=paste0(outpath,"_soloPPV_plot_all.pdf"), width=width, height=height))}
-  if (!is.null(amrrules$logistic_plot_all)) {safe_execute(ggsave(amrrules$logistic_plot_all, filename=paste0(outpath,"_logistic_plot_all.pdf"), width=width, height=height))}
-  if (!is.null(amrrules$ppv_logistic_plot_all)) {safe_execute(ggsave(amrrules$ppv_logistic_plot_all, filename=paste0(outpath,"_soloPPV_logistic_plot_all.pdf"), width=width*1.5, height=height))}
+  # subdirectory ppv_compare/
+  outdir_path_ppvcompare <- file.path(dir_path, outdir_name, "ppv_compare")
+  if (!dir.exists(outdir_path_ppvcompare)) {
+    safe_execute(dir.create(outdir_path_ppvcompare, recursive=TRUE))
+  }
+  outpath_ppvcompare <- file.path(outdir_path_ppvcompare, file_prefix)
+
+  # subdirectory logistic/
+  outdir_path_logistic <- file.path(dir_path, outdir_name, "logistic")
+  if (!dir.exists(outdir_path_logistic)) {
+    safe_execute(dir.create(outdir_path_logistic, recursive=TRUE))
+  }
+  outpath_logistic <- file.path(outdir_path_logistic, file_prefix)
+
+  safe_execute(readr::write_tsv(amrrules$modelR, file=paste0(outpath_logistic,"_logistic_R.tsv")))
+  safe_execute(readr::write_tsv(amrrules$modelNWT, file=paste0(outpath_logistic,"_logistic_NWT.tsv")))
+  if (!is.null(amrrules$logistic_plot)) {safe_execute(ggsave(amrrules$logistic_plot, filename=paste0(outpath_logistic,"_logistic.pdf"), width=width, height=height))}
+
+  safe_execute(readr::write_tsv(amrrules$modelR_all, file=paste0(outpath_logistic,"_logistic_R_ext.tsv")))
+  safe_execute(readr::write_tsv(amrrules$modelNWT_all, file=paste0(outpath_logistic,"_logistic_NWT_ext.tsv")))
+  if (!is.null(amrrules$logistic_plot_all)) {safe_execute(ggsave(amrrules$logistic_plot_all, filename=paste0(outpath_logistic,"_logistic_plot_ext.pdf"), width=width, height=height))}
+
 
   # make rules and write them out to same directory
   if (makeRules) {
@@ -350,48 +393,58 @@ amrrules_save <- function(amrrules, width=9, height=9, dir_path, outdir_name=NUL
                                     disk_S=disk_S, disk_R=disk_R, use_disk=use_disk, guide=guide,
                                     expected_R=expected_R, expected_I=expected_I))
     if (!is.null(rules)) {
-      safe_execute(readr::write_tsv(rules$rules, file=paste0(outpath,"_AMRrules.tsv")))
-      safe_execute(readr::write_tsv(rules$data, file=paste0(outpath,"_AMRrules_data.tsv")))
-      cat(paste0("\nWriting rules to ",outpath,"_AMRrules.tsv\n"))
+      safe_execute(readr::write_tsv(rules$rules, file=paste0(outpath_main,"_AMRrules.tsv")))
+      safe_execute(readr::write_tsv(rules$data, file=paste0(outpath_main,"_AMRrules_data.tsv")))
+      cat(paste0("\nWriting rules to ",outpath_main,"_AMRrules.tsv\n"))
 
       cat (" Comparing primary calls (solo PPV from MIC/disk data) with other evidence\n")
       rule_compare_R <- safe_execute(compareRulesData(rules$data, antibiotic=amrrules$antibiotic, drug_class_list=amrrules$drug_class_list, type="R"))
       rule_compare_I <- safe_execute(compareRulesData(rules$data, antibiotic=amrrules$antibiotic, drug_class_list=amrrules$drug_class_list, type="I"))
       rule_compare_NWT <- safe_execute(compareRulesData(rules$data, antibiotic=amrrules$antibiotic, drug_class_list=amrrules$drug_class_list, type="NWT"))
 
-      if (!is.null(rule_compare_R$plot)) {safe_execute(ggsave(rule_compare_R$plot, filename=paste0(outpath,"_soloPPV_R_vsOther.pdf"), width=width, height=height/2))}
-      if (!is.null(rule_compare_I$plot)) {safe_execute(ggsave(rule_compare_I$plot, filename=paste0(outpath,"_soloPPV_I_vsOther.pdf"), width=width, height=height/2))}
-      if (!is.null(rule_compare_NWT$plot)) {safe_execute(ggsave(rule_compare_NWT$plot, filename=paste0(outpath,"_soloPPV_NWT_vsOther.pdf"), width=width, height=height/2))}
-      safe_execute(readr::write_tsv(rule_compare_R$diffs, file=paste0(outpath,"_soloPPV_R_mismatchCalls.tsv")))
-      safe_execute(readr::write_tsv(rule_compare_I$diffs, file=paste0(outpath,"_soloPPV_I_mismatchCalls.tsv")))
-      safe_execute(readr::write_tsv(rule_compare_NWT$diffs, file=paste0(outpath,"_soloPPV_NWT_mismatchCalls.tsv")))
+      if (!is.null(rule_compare_R$plot)) {safe_execute(ggsave(rule_compare_R$plot, filename=paste0(outpath_ppvcompare,"_soloPPV_R_vsOther.pdf"), width=width, height=height/2))}
+      if (!is.null(rule_compare_I$plot)) {safe_execute(ggsave(rule_compare_I$plot, filename=paste0(outpath_ppvcompare,"_soloPPV_I_vsOther.pdf"), width=width, height=height/2))}
+      if (!is.null(rule_compare_NWT$plot)) {safe_execute(ggsave(rule_compare_NWT$plot, filename=paste0(outpath_ppvcompare,"_soloPPV_NWT_vsOther.pdf"), width=width, height=height/2))}
+      safe_execute(readr::write_tsv(rule_compare_R$diffs, file=paste0(outpath_ppvcompare,"_soloPPV_R_mismatchCalls.tsv")))
+      safe_execute(readr::write_tsv(rule_compare_I$diffs, file=paste0(outpath_ppvcompare,"_soloPPV_I_mismatchCalls.tsv")))
+      safe_execute(readr::write_tsv(rule_compare_NWT$diffs, file=paste0(outpath_ppvcompare,"_soloPPV_NWT_mismatchCalls.tsv")))
 
       if (testRules & !is.null(amrrules$geno_table)) {
+
+        # subdirectory predictions/
+        outdir_path_pred <- file.path(dir_path, outdir_name, "predictions")
+        if (!dir.exists(outdir_path_pred)) {
+          safe_execute(dir.create(outdir_path_pred, recursive=TRUE))
+        }
+        outpath_pred <- file.path(outdir_path_pred, file_prefix)
+
         cat (" Predicting phenotypes by applying rules to interpret genotypes (can take a few minutes)\n")
         test_vs_rules <- safe_execute(test_rules_amrfp(amrrules$geno_table %>% filter(drug_class %in% amrrules$drug_class_list), rules$rules, amrrules$species))
-        safe_execute(readr::write_tsv(test_vs_rules, file=paste0(outpath,"_predictionsFromRules.tsv")))
+        safe_execute(readr::write_tsv(test_vs_rules, file=paste0(outpath_pred,"_predictionsFromRules.tsv")))
 
         if (!is.null(amrrules$pheno_table)) {
           cat (" Comparing phenotypes predicted from rules vs observed phenotypes\n")
           compare_pred <- safe_execute(compare_interpretations(pred=test_vs_rules,
                                                                obs=amrrules$pheno_table,
                                                                antibiotic=amrrules$antibiotic,
-                                                               sir_col=sir_col,
-                                                               ecoff_col=ecoff_col,
+                                                               sir_col=amrrules$sir_col,
+                                                               ecoff_col=amrrules$ecoff_col,
                                                                var="method"))
 
-          safe_execute(readr::write_tsv(compare_pred$true_vs_predict, file=paste0(outpath,"_predictionsVsPhenotypeByMethod.tsv")))
-          safe_execute(readr::write_tsv(compare_pred$pred_ppv$table_sir, file=paste0(outpath,"_predictionsVsCategory_summary.tsv")))
-          safe_execute(readr::write_tsv(compare_pred$pred_ppv$table_ecoff, file=paste0(outpath,"_predictionsVsPhenotype_summary.tsv")))
-          if (!is.null(compare_pred$pred_ppv$plot_sir)) {safe_execute(ggsave(compare_pred$pred_ppv$plot_sir, filename=paste0(outpath,"_predictionsVsCategory.pdf"), width=width, height=height/2))}
-          if (!is.null(compare_pred$pred_ppv$plot_ecoff)) {safe_execute(ggsave(compare_pred$pred_ppv$plot_ecoff, filename=paste0(outpath,"_predictionsVsPhenotype.pdf"), width=width, height=height/2))}
+          safe_execute(readr::write_tsv(compare_pred$pred_ppv$table_sir, file=paste0(outpath_pred,"_SIRpredictions.tsv")))
+          safe_execute(readr::write_tsv(compare_pred$pred_ppv$table_ecoff, file=paste0(outpath_pred,"_NWTpredictions.tsv")))
+          if (!is.null(compare_pred$pred_ppv$plot_sir)) {safe_execute(ggsave(compare_pred$pred_ppv$plot_sir, filename=paste0(outpath_pred,"_SIRpredictions.pdf"), width=width, height=height/2))}
+          if (!is.null(compare_pred$pred_ppv$plot_ecoff)) {safe_execute(ggsave(compare_pred$pred_ppv$plot_ecoff, filename=paste0(outpath_pred,"_NWTpredictions.pdf"), width=width, height=height/2))}
 
-          if (!is.null(compare_pred$pred_ppv_bymethod$plot_sir)) {safe_execute(ggsave(compare_pred$pred_ppv_bymethod$plot_sir, filename=paste0(outpath,"_SIRpredictionsByMethod.pdf"), width=width, height=height/2))}
-          if (!is.null(compare_pred$pred_ppv_bymethod$plot_ecoff)) {safe_execute(ggsave(compare_pred$pred_ppv_bymethod$plot_ecoff, filename=paste0(outpath,"_NWTpredictionsVsPhenotype.pdf"), width=width, height=height/2))}
-          if (!is.null(compare_pred$dist_mic_bypred_bymethod$pred)) {safe_execute(ggsave(compare_pred$dist_mic_bypred_bymethod$pred, filename=paste0(outpath,"_SIRpredictionsVsMICbyMethod.pdf"), width=width, height=height))}
-          if (!is.null(compare_pred$dist_mic_bypred_bymethod$pred_ecoff)) {safe_execute(ggsave(compare_pred$dist_mic_bypred_bymethod$pred_ecoff, filename=paste0(outpath,"_NWTpredictionsVsMICbyMethod.pdf"), width=width, height=height))}
-          if (!is.null(compare_pred$dist_disk_bypred_bymethod$pred)) {safe_execute(ggsave(compare_pred$dist_disk_bypred_bymethod$pred, filename=paste0(outpath,"_SIRpredictionsVsDiskbyMethod.pdf"), width=width, height=height))}
-          if (!is.null(compare_pred$dist_disk_bypred_bymethod$pred_ecoff)) {safe_execute(ggsave(compare_pred$dist_disk_bypred_bymethod$pred_ecoff, filename=paste0(outpath,"_NWTpredictionsVsDiskbyMethod.pdf"), width=width, height=height))}
+          if (!is.null(compare_pred$pred_ppv_bymethod$plot_sir)) {safe_execute(ggsave(compare_pred$pred_ppv_bymethod$plot_sir, filename=paste0(outpath_pred,"_SIRpredictions_byMethod.pdf"), width=width, height=height))}
+          if (!is.null(compare_pred$pred_ppv_bymethod$plot_ecoff)) {safe_execute(ggsave(compare_pred$pred_ppv_bymethod$plot_ecoff, filename=paste0(outpath_pred,"_NWTpredictions_byMethod.pdf"), width=width, height=height))}
+          safe_execute(readr::write_tsv(compare_pred$pred_ppv_bymethod$table_sir, file=paste0(outpath_pred,"_SIRpredictions_byMethod.tsv")))
+          safe_execute(readr::write_tsv(compare_pred$pred_ppv_bymethod$table_ecoff, file=paste0(outpath_pred,"_NWTpredictions_byMethod.tsv")))
+
+          if (!is.null(compare_pred$dist_mic_bypred_bymethod$pred)) {safe_execute(ggsave(compare_pred$dist_mic_bypred_bymethod$pred, filename=paste0(outpath_pred,"_SIRpredictions_MICdistByMethod.pdf"), width=width, height=height))}
+          if (!is.null(compare_pred$dist_mic_bypred_bymethod$pred_ecoff)) {safe_execute(ggsave(compare_pred$dist_mic_bypred_bymethod$pred_ecoff, filename=paste0(outpath_pred,"_NWTpredictions_MICdistByMethod.pdf"), width=width, height=height))}
+          if (!is.null(compare_pred$dist_disk_bypred_bymethod$pred)) {safe_execute(ggsave(compare_pred$dist_disk_bypred_bymethod$pred, filename=paste0(outpath_pred,"_SIRpredictions_diskDistByMethod.pdf"), width=width, height=height))}
+          if (!is.null(compare_pred$dist_disk_bypred_bymethod$pred_ecoff)) {safe_execute(ggsave(compare_pred$dist_disk_bypred_bymethod$pred_ecoff, filename=paste0(outpath_pred,"_NWTpredictions_diskDistByMethod.pdf"), width=width, height=height))}
 
         } # finish comparing predictions to data
         else {cat ("  Not comparing predictions to observed phenotypes as no pheno_table provided")}
