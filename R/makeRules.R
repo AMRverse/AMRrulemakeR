@@ -607,5 +607,7 @@ makerules <- function(amrrules, minObs=3, low_threshold=20, core_threshold=0.9,
     mutate(across(everything(), ~ ifelse(is.na(.), "-", .))) %>%
     mutate(across(everything(), ~ ifelse(.=="", "-", .)))
 
-  return(list(data=data, rules=rules))
+  return(list(data=data, rules=rules,
+              mic_S=mic_S, mic_R=mic_R, mic_ecoff=mic_ecoff,
+              disk_S=disk_S, disk_R=disk_R, disk_ecoff=disk_ecoff))
 }

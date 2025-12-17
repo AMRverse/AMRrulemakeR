@@ -555,7 +555,8 @@ checkMICranges <- function(geno_table, pheno_table, antibiotic, drug_class_list,
               soloPPV_micdisk=soloPPV_micdisk))
 }
 
-compare_interpretations <- function(pred, obs, antibiotic, sir_col="pheno_eucast", ecoff_col="ecoff", var="method") {
+compare_interpretations <- function(pred, obs, antibiotic, sir_col="pheno_eucast", ecoff_col="ecoff", var="method",
+                                    mic_S=NULL, mic_R=NULL, mic_ecoff=NULL, disk_S=NULL, disk_R=NULL, disk_ecoff=NULL) {
   antibiotic <- as.ab(antibiotic)
   obs <- obs %>% filter(!is.na(get(sir_col)) | !is.na(get(ecoff_col)))
 
@@ -577,11 +578,22 @@ compare_interpretations <- function(pred, obs, antibiotic, sir_col="pheno_eucast
   }
 
   ppv_bymethod <- safe_execute(predictive_value_by_var(true_vs_predict, sir_col=sir_col, ecoff_col=ecoff_col, var="type"))
-  dist_mic_bypred_bymethod <- safe_execute(pred_by_var(true_vs_predict %>% filter(!is.na(mic)), antibiotic, assay="mic", var="method"))
-  dist_disk_bypred_bymethod <- safe_execute(pred_by_var(true_vs_predict %>% filter(!is.na(disk)), antibiotic, assay="disk", var="method"))
+
+  dist_mic_bypred <- safe_execute(dist_by_pred(true_vs_predict %>% filter(!is.na(mic)), antibiotic, assay="mic", var=NULL,
+                                               breakpoint_ecoff=mic_ecoff, breakpoint_S=mic_S, breakpoint_R = mic_R))
+  dist_mic_bypred_bymethod <- safe_execute(dist_by_pred(true_vs_predict %>% filter(!is.na(mic)), antibiotic, assay="mic", var=var,
+                                              breakpoint_ecoff=mic_ecoff, breakpoint_S=mic_S, breakpoint_R = mic_R))
+
+  dist_disk_bypred <- safe_execute(dist_by_pred(true_vs_predict %>% filter(!is.na(disk)), antibiotic, assay="disk", var=NULL,
+                                                breakpoint_ecoff=disk_ecoff, breakpoint_S=disk_S, breakpoint_R = disk_R))
+  dist_disk_bypred_bymethod <- safe_execute(dist_by_pred(true_vs_predict %>% filter(!is.na(disk)), antibiotic, assay="disk", var=var,
+                                                breakpoint_ecoff=disk_ecoff, breakpoint_S=disk_S, breakpoint_R = disk_R))
 
   return(list(true_vs_predict=true_vs_predict,
-         pred_ppv=ppv, pred_ppv_bymethod=ppv_bymethod,
+         pred_ppv=ppv,
+         pred_ppv_bymethod=ppv_bymethod,
+         dist_mic_bypred=dist_mic_bypred,
+         dist_disk_bypred=dist_disk_bypred,
          dist_mic_bypred_bymethod=dist_mic_bypred_bymethod,
          dist_disk_bypred_bymethod=dist_disk_bypred_bymethod))
 }
@@ -636,6 +648,10 @@ predictive_value_by_var <- function(true_vs_predict, sir_col="pheno_eucast", eco
     count(!!sym(sir_col), category, !!sym(var)) %>%
     group_by(category, !!sym(var)) %>% mutate(pct= prop.table(n) * 100) %>%
     mutate(category=as.sir(category)) %>% arrange(category)
+  totals <- sir_ppv %>%
+    group_by(!!sym(var), category) %>%
+    summarise(n_total = sum(n, na.rm = TRUE), .groups = 'drop')
+
   sir_ppv_plot <- sir_ppv %>%
     ggplot(aes(fill=!!sym(sir_col), x=!!sym(var), y=n)) +
     geom_col(position="fill") + scale_fill_sir() + coord_flip() +
@@ -646,6 +662,8 @@ predictive_value_by_var <- function(true_vs_predict, sir_col="pheno_eucast", eco
     ggplot(aes(fill=!!sym(sir_col), x=!!sym(var), y=n)) +
     geom_col() + scale_fill_sir() + coord_flip() +
     labs(fill="Observed", x="Assay method", y="Count", subtitle="Counts") +
+    geom_text(data=totals, aes(x = !!sym(var), y=n_total, label=n_total),
+      inherit.aes = FALSE, hjust = -0.2,size = 3.5) +
     facet_wrap(~category, ncol=1)
   test_sir_ppv_plot <- sir_ppv_n_plot + sir_ppv_plot +
     patchwork::plot_layout(guides="collect", axes="collect") +
@@ -656,6 +674,10 @@ predictive_value_by_var <- function(true_vs_predict, sir_col="pheno_eucast", eco
     count(!!sym(ecoff_col), phenotype, !!sym(var)) %>%
     group_by(phenotype, !!sym(var)) %>% mutate(pct= prop.table(n) * 100) %>%
     arrange(phenotype)
+  totals_ecoff <- ecoff_ppv %>%
+    group_by(!!sym(var), phenotype) %>%
+    summarise(n_total = sum(n, na.rm = TRUE), .groups = 'drop')
+
   ecoff_ppv_plot <- ecoff_ppv %>%
     ggplot(aes(fill=!!sym(ecoff_col), x=!!sym(var), y=n)) +
     geom_col(position="fill") + scale_fill_sir() + coord_flip() +
@@ -666,6 +688,8 @@ predictive_value_by_var <- function(true_vs_predict, sir_col="pheno_eucast", eco
     ggplot(aes(fill=!!sym(ecoff_col), x=!!sym(var), y=n)) +
     geom_col() + scale_fill_sir() + coord_flip() +
     labs(fill="Observed", x="Assay method", y="Count", subtitle="Counts") +
+    geom_text(data=totals_ecoff, aes(x = !!sym(var), y=n_total, label=n_total),
+              inherit.aes = FALSE, hjust = -0.2,size = 3.5) +
     facet_wrap(~phenotype, ncol=1)
   test_ecoff_ppv_plot <- ecoff_ppv_n_plot + ecoff_ppv_plot +
     patchwork::plot_layout(guides="collect", axes="collect") +
@@ -675,31 +699,66 @@ predictive_value_by_var <- function(true_vs_predict, sir_col="pheno_eucast", eco
               table_ecoff=ecoff_ppv, plot_ecoff=test_ecoff_ppv_plot))
 }
 
-pred_by_var <- function(true_vs_predict, antibiotic, assay="mic", var="method") {
+dist_by_pred <- function(true_vs_predict, antibiotic, assay="mic", var="method",
+                              breakpoint_S=NULL, breakpoint_R=NULL, breakpoint_ecoff=NULL) {
+
   if (assay %in% assay & assay %in% colnames(true_vs_predict)) {
     true_vs_predict <- true_vs_predict %>%
       filter(!is.na(!!sym(assay))) %>%
       mutate(category=as.sir(category))
+
+    pred_data <- true_vs_predict %>% count(factor(!!sym(assay)), category)
+    colnames(pred_data)[1] <- assay
+
+    if(!is.null(breakpoint_ecoff)) {ecoff_subtitle <- paste0("ECOFF: ", breakpoint_ecoff)}
+    else {ecoff_subtitle=""}
+
+    if (!is.null(breakpoint_S) | !is.null(breakpoint_R) | !is.null(breakpoint_ecoff)) {
+      subtitle <- list()
+      if(!is.null(breakpoint_S)) {subtitle <- append(subtitle, paste0("S: ", breakpoint_S))}
+      if(!is.null(breakpoint_R)) {subtitle <- append(subtitle, paste0("R: ", breakpoint_R))}
+      subtitle <- paste(subtitle, collapse=",")
+
+      # get x coordinates for breakpoints after converting to factor
+      assay_order <- true_vs_predict %>% count(factor(!!sym(assay)))
+      colnames(assay_order)[1] <- assay
+      breakpoint_S <- c(1:nrow(assay_order))[assay_order[,1]==breakpoint_S]
+      breakpoint_R <- c(1:nrow(assay_order))[assay_order[,1]==breakpoint_R]
+      breakpoint_ecoff <- c(1:nrow(assay_order))[assay_order[,1]==breakpoint_ecoff]
+    } else {subtitle=""}
+
     pred <- true_vs_predict %>%
       ggplot(aes(x=factor(!!sym(assay)), fill=category)) +
       geom_bar() + scale_fill_sir() +
       labs(x="Measure", y="count", fill="Predicted",
            title=paste(ab_name(as.ab(antibiotic)), "assay distributions for all samples"),
-           subtitle="coloured by predicted S/I/R") +
+           subtitle=paste("coloured by predicted S/I/R", subtitle)) +
       theme(axis.text.x = element_text(angle = 60, vjust = 1, hjust = 1))
-    if (true_vs_predict %>% filter(!is.na(get(var))) %>% nrow() > 0) {
-      pred <- pred + facet_wrap(~get(var), ncol=1, scales="free_y")
-    }
+
     pred_ecoff <- true_vs_predict %>%
       ggplot(aes(x=factor(!!sym(assay)), fill=phenotype)) +
       geom_bar() +
       labs(x="Measure", y="count", fill="Predicted (ECOFF)",
            title=paste(ab_name(as.ab(antibiotic)), "assay distributions for all samples"),
-           subtitle="coloured by predicted WT/NWT") +
+           subtitle=paste("coloured by predicted WT/NWT", ecoff_subtitle)) +
       theme(axis.text.x = element_text(angle = 60, vjust = 1, hjust = 1)) +
       scale_fill_manual(values=c(wildtype="#3CAEA3", nonwildtype="#ED553B", `NA`="grey"))
-    if (true_vs_predict %>% filter(!is.na(get(var))) %>% nrow() > 0) {
-      pred_ecoff <- pred_ecoff + facet_wrap(~get(var), ncol=1, scales="free_y")
+
+    # add breakpoints
+    if (!is.null(breakpoint_S)) {
+      pred <- pred + geom_vline(xintercept=breakpoint_S, color="#3CAEA3", linetype=2) }
+    if (!is.null(breakpoint_R)) {
+      pred <- pred + geom_vline(xintercept=breakpoint_R, color="#ED553B", linetype=2) }
+    if (!is.null(breakpoint_ecoff)) {
+      pred_ecoff <- pred_ecoff + geom_vline(xintercept=breakpoint_ecoff, color="#ED553B", linetype=2) }
+
+    # add facets
+    if (!is.null(var)) {
+      if (var %in% colnames(true_vs_predict)) {
+        if (true_vs_predict %>% filter(!is.na(get(var))) %>% nrow() > 0) {
+          pred <- pred + facet_wrap(~get(var), ncol=1, scales="free_y")
+          pred_ecoff <- pred_ecoff + facet_wrap(~get(var), ncol=1, scales="free_y")
+        }}
     }
   } else {
     pred <- NULL

@@ -84,14 +84,18 @@ amrrules_analysis <- function(geno_table, pheno_table, antibiotic, drug_class_li
   reference_disk <- safe_execute(rep(reference_disk$disk_diffusion, reference_disk$count))
   reference_disk_plot <- safe_execute(ggplot2::autoplot(reference_disk, ab = antibiotic, mo = species, title = "EUCAST reference disk zone distribtion"))
 
-  input_mic_sir_plot <- safe_execute(AMRgen::assay_by_var(pheno_table, antibiotic, measure="mic", facet_var="method",
+  input_mic_sir_plot <- safe_execute(AMRgen::assay_by_var(pheno_table, antibiotic, measure="mic", facet_var=NULL,
+                                                          species=species, bp_site=bp_site, colour_by=sir_col))
+  input_mic_sir_plot_bymethod <- safe_execute(AMRgen::assay_by_var(pheno_table, antibiotic, measure="mic", facet_var="method",
                                   species=species, bp_site=bp_site, colour_by=sir_col))
-  input_mic_nwt_plot <- safe_execute(AMRgen::assay_by_var(pheno_table, antibiotic, measure="mic", facet_var="method",
+  input_mic_nwt_plot_bymethod <- safe_execute(AMRgen::assay_by_var(pheno_table, antibiotic, measure="mic", facet_var="method",
                                                           species=species, bp_site=bp_site, colour_by=ecoff_col))
 
-  input_disk_sir_plot <- safe_execute(AMRgen::assay_by_var(pheno_table, antibiotic, measure="disk", facet_var="method",
+  input_disk_sir_plot <- safe_execute(AMRgen::assay_by_var(pheno_table, antibiotic, measure="disk", facet_var=NULL,
+                                                           species=species, bp_site=bp_site, colour_by=sir_col))
+  input_disk_sir_plot_bymethod <- safe_execute(AMRgen::assay_by_var(pheno_table, antibiotic, measure="disk", facet_var="method",
                                                           species=species, bp_site=bp_site, colour_by=sir_col))
-  input_disk_nwt_plot <- safe_execute(AMRgen::assay_by_var(pheno_table, antibiotic, measure="disk", facet_var="method",
+  input_disk_nwt_plot_bymethod <- safe_execute(AMRgen::assay_by_var(pheno_table, antibiotic, measure="disk", facet_var="method",
                                                           species=species, bp_site=bp_site, colour_by=ecoff_col))
 
   ### TO DO: improve this
@@ -211,9 +215,11 @@ amrrules_analysis <- function(geno_table, pheno_table, antibiotic, drug_class_li
               reference_mic=reference_mic,
               reference_disk=reference_disk,
               input_mic_sir_plot=input_mic_sir_plot,
-              input_mic_nwt_plot=input_mic_nwt_plot,
+              input_mic_sir_plot_bymethod=input_mic_sir_plot_bymethod,
+              input_mic_nwt_plot_bymethod=input_mic_nwt_plot_bymethod,
               input_disk_sir_plot=input_disk_sir_plot,
-              input_disk_nwt_plot=input_disk_nwt_plot,
+              input_disk_sir_plot_bymethod=input_disk_sir_plot_bymethod,
+              input_disk_nwt_plot_bymethod=input_disk_nwt_plot_bymethod,
               solo_stats=soloPPV_micdisk$solo_stats,
               solo_binary=soloPPV_micdisk$solo_binary,
               amr_binary=soloPPV_micdisk$amr_binary,
@@ -334,10 +340,12 @@ amrrules_save <- function(amrrules, width=9, height=9, dir_path, outdir_name=NUL
   # write out reference and observed distributions
   if (!is.null(amrrules$reference_mic_plot)) {safe_execute(ggsave(amrrules$reference_mic_plot, filename=paste0(outpath_dist,"_reference_mic_plot.pdf"), width=width, height=height))}
   if (!is.null(amrrules$reference_disk_plot)) {safe_execute(ggsave(amrrules$reference_disk_plot, filename=paste0(outpath_dist,"_reference_disk_plot.pdf"), width=width, height=height))}
-  if (!is.null(amrrules$input_mic_sir_plot$plot)) {safe_execute(ggsave(amrrules$input_mic_sir_plot$plot, filename=paste0(outpath_dist,"_inputMIC_bySIR_byMethod.pdf"), width=width, height=height))}
-  if (!is.null(amrrules$input_mic_nwt_plot$plot)) {safe_execute(ggsave(amrrules$input_mic_nwt_plot$plot, filename=paste0(outpath_dist,"_inputMIC_byNWT_byMethod.pdf"), width=width, height=height))}
-  if (!is.null(amrrules$input_disk_sir_plot$plot)) {safe_execute(ggsave(amrrules$input_disk_sir_plot$plot, filename=paste0(outpath_dist,"_inputDisk_bySIR_byMethod.pdf"), width=width, height=height))}
-  if (!is.null(amrrules$input_disk_nwt_plot$plot)) {safe_execute(ggsave(amrrules$input_disk_nwt_plot$plot, filename=paste0(outpath_dist,"_inputDisk_byNWT_byMethod.pdf"), width=width, height=height))}
+  if (!is.null(amrrules$input_mic_sir_plot$plot)) {safe_execute(ggsave(amrrules$input_mic_sir_plot$plot, filename=paste0(outpath_dist,"_inputMIC_bySIR.pdf"), width=width, height=height))}
+  if (!is.null(amrrules$input_mic_sir_plot_bymethod$plot)) {safe_execute(ggsave(amrrules$input_mic_sir_plot_bymethod$plot, filename=paste0(outpath_dist,"_inputMIC_bySIR_byMethod.pdf"), width=width, height=height))}
+  if (!is.null(amrrules$input_mic_nwt_plot_bymethod$plot)) {safe_execute(ggsave(amrrules$input_mic_nwt_plot_bymethod$plot, filename=paste0(outpath_dist,"_inputMIC_byNWT_byMethod.pdf"), width=width, height=height))}
+  if (!is.null(amrrules$input_disk_sir_plot$plot)) {safe_execute(ggsave(amrrules$input_disk_sir_plot$plot, filename=paste0(outpath_dist,"_inputDisk_bySIR.pdf"), width=width, height=height))}
+  if (!is.null(amrrules$input_disk_sir_plot_bymethod$plot)) {safe_execute(ggsave(amrrules$input_disk_sir_plot_bymethod$plot, filename=paste0(outpath_dist,"_inputDisk_bySIR_byMethod.pdf"), width=width, height=height))}
+  if (!is.null(amrrules$input_disk_nwt_plot_bymethod$plot)) {safe_execute(ggsave(amrrules$input_disk_nwt_plot_bymethod$plot, filename=paste0(outpath_dist,"_inputDisk_byNWT_byMethod.pdf"), width=width, height=height))}
 
 
   # subdirectory ppv/
@@ -429,7 +437,11 @@ amrrules_save <- function(amrrules, width=9, height=9, dir_path, outdir_name=NUL
                                                                antibiotic=amrrules$antibiotic,
                                                                sir_col=amrrules$sir_col,
                                                                ecoff_col=amrrules$ecoff_col,
-                                                               var="method"))
+                                                               var="method",
+                                                               mic_S=rules$mic_S, mic_R=rules$mic_R,
+                                                               disk_S=rules$disk_S, disk_R=rules$disk_R,
+                                                               mic_ecoff=rules$mic_ecoff,
+                                                               disk_ecoff=rules$disk_ecoff))
 
           safe_execute(readr::write_tsv(compare_pred$pred_ppv$table_sir, file=paste0(outpath_pred,"_SIRpredictions.tsv")))
           safe_execute(readr::write_tsv(compare_pred$pred_ppv$table_ecoff, file=paste0(outpath_pred,"_NWTpredictions.tsv")))
@@ -441,10 +453,15 @@ amrrules_save <- function(amrrules, width=9, height=9, dir_path, outdir_name=NUL
           safe_execute(readr::write_tsv(compare_pred$pred_ppv_bymethod$table_sir, file=paste0(outpath_pred,"_SIRpredictions_byMethod.tsv")))
           safe_execute(readr::write_tsv(compare_pred$pred_ppv_bymethod$table_ecoff, file=paste0(outpath_pred,"_NWTpredictions_byMethod.tsv")))
 
+          if (!is.null(compare_pred$dist_mic_bypred$pred)) {safe_execute(ggsave(compare_pred$dist_mic_bypred$pred, filename=paste0(outpath_pred,"_SIRpredictions_MICdist.pdf"), width=width, height=height))}
+          if (!is.null(compare_pred$dist_mic_bypred$pred_ecoff)) {safe_execute(ggsave(compare_pred$dist_mic_bypred$pred_ecoff, filename=paste0(outpath_pred,"_NWTpredictions_MICdist.pdf"), width=width, height=height))}
           if (!is.null(compare_pred$dist_mic_bypred_bymethod$pred)) {safe_execute(ggsave(compare_pred$dist_mic_bypred_bymethod$pred, filename=paste0(outpath_pred,"_SIRpredictions_MICdistByMethod.pdf"), width=width, height=height))}
           if (!is.null(compare_pred$dist_mic_bypred_bymethod$pred_ecoff)) {safe_execute(ggsave(compare_pred$dist_mic_bypred_bymethod$pred_ecoff, filename=paste0(outpath_pred,"_NWTpredictions_MICdistByMethod.pdf"), width=width, height=height))}
           if (!is.null(compare_pred$dist_disk_bypred_bymethod$pred)) {safe_execute(ggsave(compare_pred$dist_disk_bypred_bymethod$pred, filename=paste0(outpath_pred,"_SIRpredictions_diskDistByMethod.pdf"), width=width, height=height))}
           if (!is.null(compare_pred$dist_disk_bypred_bymethod$pred_ecoff)) {safe_execute(ggsave(compare_pred$dist_disk_bypred_bymethod$pred_ecoff, filename=paste0(outpath_pred,"_NWTpredictions_diskDistByMethod.pdf"), width=width, height=height))}
+          if (!is.null(compare_pred$dist_disk_bypred$pred)) {safe_execute(ggsave(compare_pred$dist_disk_bypred$pred, filename=paste0(outpath_pred,"_SIRpredictions_diskDist.pdf"), width=width, height=height))}
+          if (!is.null(compare_pred$dist_disk_bypred$pred_ecoff)) {safe_execute(ggsave(compare_pred$dist_disk_bypred$pred_ecoff, filename=paste0(outpath_pred,"_NWTpredictions_diskDist.pdf"), width=width, height=height))}
+
 
         } # finish comparing predictions to data
         else {cat ("  Not comparing predictions to observed phenotypes as no pheno_table provided")}
@@ -471,7 +488,9 @@ amrrules_save <- function(amrrules, width=9, height=9, dir_path, outdir_name=NUL
               predict_vs_obs_stats=compare_pred$pred_ppv,
               predict_vs_obs_stats_byMethod=compare_pred$pred_ppv_bymethod,
               predict_vs_mic_dist_byMethod=compare_pred$dist_mic_bypred_bymethod,
-              predict_vs_disk_dist_byMethod=compare_pred$dist_disk_bypred_bymethod
+              predict_vs_disk_dist_byMethod=compare_pred$dist_disk_bypred_bymethod,
+              predict_vs_mic_dist=compare_pred$dist_mic_bypred,
+              predict_vs_disk_dist=compare_pred$dist_disk_bypred
               ))
 }
 
