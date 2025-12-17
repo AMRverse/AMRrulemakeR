@@ -487,7 +487,7 @@ makerules <- function(amrrules, minObs=3, low_threshold=20, core_threshold=0.9,
 
   # gene info for this species
   gene_info <- amrrules$afp_hits %>%
-    left_join(pubmed, by="Gene symbol") %>%
+    left_join(pubmed, by="Gene symbol", multiple="any") %>% # need to fix this
     #mutate(context=if_else(freq>core_threshold, "core", "accessory")) %>% # need to review wrt manual rules and hierarchy
     mutate(mutation=if_else(is.na(mutation), "-", mutation)) %>%
     mutate(marker=as.character(marker.label)) %>% # to match HGVS formatted labels in the input stats
