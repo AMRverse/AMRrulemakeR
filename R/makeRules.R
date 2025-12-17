@@ -483,11 +483,13 @@ makerules <- function(amrrules, minObs=3, low_threshold=20, core_threshold=0.9,
     mutate(`Gene symbol`= if_else(!is.na(allele), allele, gene_family)) %>%
     filter(whitelisted_taxa==amrrules$species | whitelisted_taxa==genus | is.na(whitelisted_taxa)) %>%
     select(`Gene symbol`, pubmed_reference) %>%
-    rename(PMID=pubmed_reference)
+    rename(PMID=pubmed_reference) %>%
+    group_by(`Gene symbol`) %>%
+    summarise(PMID=paste(na.omit(PMID), collapse=","))
 
   # gene info for this species
   gene_info <- amrrules$afp_hits %>%
-    left_join(pubmed, by="Gene symbol", multiple="any") %>% # need to fix this
+    left_join(pubmed, by="Gene symbol") %>%
     #mutate(context=if_else(freq>core_threshold, "core", "accessory")) %>% # need to review wrt manual rules and hierarchy
     mutate(mutation=if_else(is.na(mutation), "-", mutation)) %>%
     mutate(marker=as.character(marker.label)) %>% # to match HGVS formatted labels in the input stats
