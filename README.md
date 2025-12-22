@@ -173,7 +173,7 @@ study1_ast <- interpret_ast(study1_ast, interpret_ecoff = TRUE, interpret_eucast
 ```
 
 ## Collate and format AMRfinderplus genotype data
-For use with the AMRrulemakeR package, you need to process the AMRfinderplus data using `import_afp()`, which generates consistent marker labels that will be the units of analysis, and which can ultimately be represented in the AMRrules variant specification format.
+For use with the AMRrulemakeR package, you need to process the AMRfinderplus data using `import_afp()`, which generates consistent marker labels that will be the units of analysis, and which can ultimately be represented in the AMRrules variant specification format. It also parses refgene Class/Subclass into drug classes recognised by the AMR R packagea and CARD ARO. 
 
 Example data frame included in the AMRgen package:
 
@@ -227,6 +227,9 @@ afp_all <- afp_status %>% rename(Name=sample) %>% left_join(afp) %>% filter(stat
 
 # include only those genomes that we have ast data for in our `ast` object
 afp_matching <- afp_all %>% filter(Name %in% ast$id)
+
+# import to AMRgen format
+afp_matching <- import_afp(afp_matching)
 ```
 
 ## Review the available data and breakpoints
