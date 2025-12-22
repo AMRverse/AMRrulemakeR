@@ -442,6 +442,16 @@ amrrules_save <- function(amrrules, width=9, height=9, dir_path, outdir_name=NUL
                                                                disk_S=rules$disk_S, disk_R=rules$disk_R,
                                                                mic_ecoff=rules$mic_ecoff,
                                                                disk_ecoff=rules$disk_ecoff))
+          if ("source" %in% colnames(compare_pred$true_vs_predict)) {
+            if ("method" %in% colnames(compare_pred$true_vs_predict)) {
+              compare_pred$true_vs_predict <- compare_pred$true_vs_predict %>%
+                mutate(source_label=paste(method, source))
+            } else {
+              compare_pred$true_vs_predict <- compare_pred$true_vs_predict %>%
+                mutate(source_label=source)
+            }
+              ppv_bysource <- safe_execute(predictive_value_by_var(true_vs_predict=compare_pred$true_vs_predict, sir_col=amrrules$sir_col, ecoff_col=amrrules$ecoff_col, var="source_label"))
+          }
 
           safe_execute(readr::write_tsv(compare_pred$pred_ppv$table_sir, file=paste0(outpath_pred,"_SIRpredictions.tsv")))
           safe_execute(readr::write_tsv(compare_pred$pred_ppv$table_ecoff, file=paste0(outpath_pred,"_NWTpredictions.tsv")))
@@ -452,6 +462,11 @@ amrrules_save <- function(amrrules, width=9, height=9, dir_path, outdir_name=NUL
           if (!is.null(compare_pred$pred_ppv_bymethod$plot_ecoff)) {safe_execute(ggsave(compare_pred$pred_ppv_bymethod$plot_ecoff, filename=paste0(outpath_pred,"_NWTpredictions_byMethod.pdf"), width=width, height=height))}
           safe_execute(readr::write_tsv(compare_pred$pred_ppv_bymethod$table_sir, file=paste0(outpath_pred,"_SIRpredictions_byMethod.tsv")))
           safe_execute(readr::write_tsv(compare_pred$pred_ppv_bymethod$table_ecoff, file=paste0(outpath_pred,"_NWTpredictions_byMethod.tsv")))
+
+          if (!is.null(ppv_bysource$plot_sir)) {safe_execute(ggsave(ppv_bysource$plot_sir, filename=paste0(outpath_pred,"_SIRpredictions_bySource.pdf"), width=width, height=height*2))}
+          if (!is.null(ppv_bysource$plot_ecoff)) {safe_execute(ggsave(ppv_bysource$plot_ecoff, filename=paste0(outpath_pred,"_NWTpredictions_bySource.pdf"), width=width, height=height*2))}
+          safe_execute(readr::write_tsv(ppv_bysource$table_sir, file=paste0(outpath_pred,"_SIRpredictions_bySource.tsv")))
+          safe_execute(readr::write_tsv(ppv_bysource$table_ecoff, file=paste0(outpath_pred,"_NWTpredictions_bySource.tsv")))
 
           if (!is.null(compare_pred$dist_mic_bypred$pred)) {safe_execute(ggsave(compare_pred$dist_mic_bypred$pred, filename=paste0(outpath_pred,"_SIRpredictions_MICdist.pdf"), width=width, height=height))}
           if (!is.null(compare_pred$dist_mic_bypred$pred_ecoff)) {safe_execute(ggsave(compare_pred$dist_mic_bypred$pred_ecoff, filename=paste0(outpath_pred,"_NWTpredictions_MICdist.pdf"), width=width, height=height))}
@@ -487,6 +502,7 @@ amrrules_save <- function(amrrules, width=9, height=9, dir_path, outdir_name=NUL
               predict_vs_obs_dat=compare_pred$true_vs_predict,
               predict_vs_obs_stats=compare_pred$pred_ppv,
               predict_vs_obs_stats_byMethod=compare_pred$pred_ppv_bymethod,
+              predict_vs_obs_stats_bySource=ppv_bysource,
               predict_vs_mic_dist_byMethod=compare_pred$dist_mic_bypred_bymethod,
               predict_vs_disk_dist_byMethod=compare_pred$dist_disk_bypred_bymethod,
               predict_vs_mic_dist=compare_pred$dist_mic_bypred,
