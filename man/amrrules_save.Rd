@@ -23,7 +23,9 @@ amrrules_save(
   use_disk = TRUE,
   guide = "EUCAST 2025",
   makeRules = TRUE,
-  testRules = TRUE
+  testRules = TRUE,
+  expected_R = NULL,
+  expected_I = NULL
 )
 }
 \arguments{
@@ -64,6 +66,10 @@ amrrules_save(
 \item{makeRules}{Logical indicating whether to use define AMR rules from the data provided. Default is \code{TRUE}.}
 
 \item{testRules}{Logical indicating whether to use test the rules by using them to interpret the genotypes as S/I/R and compare to the observed phenotypes. Default is \code{TRUE}.}
+
+\item{expected_R}{Logical indicating whether to manually enforce whether or not this drug is an expected 'R' for this species. If NULL, we will check if this species & drug is included in \code{AMR::intrinsic_resistant}.}
+
+\item{expected_I}{Logical indicating whether to manually enforce whether or not this drug should be reported as 'I' for this species. If NULL, we will check the S breakpoints and assume if this is set to 0.001 (MIC), or 50 (disk) this drug should always be reported as I not S.}
 }
 \value{
 A data frame containing the generated AMR rules.

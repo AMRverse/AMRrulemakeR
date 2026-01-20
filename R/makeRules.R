@@ -53,6 +53,7 @@
 #' @import dplyr
 #' @import ggplot2
 #' @importFrom AMR as.ab as.mo
+#' @importFrom rlang is_empty
 #'
 #' @export
 makerules <- function(amrrules, minObs=3, low_threshold=20, core_threshold=0.9,
@@ -77,11 +78,11 @@ makerules <- function(amrrules, minObs=3, low_threshold=20, core_threshold=0.9,
   # check if we have a valid ruleID prefix
   if(is.null(rule_prefix)) {
     rule_prefix <- organism_codes %>% filter(mo==as.mo(species)) %>% pull(Prefix) # try using species
-    if (is_empty(rule_prefix)) {
+    if (rlang::is_empty(rule_prefix)) {
       genus <- microorganisms %>% filter(mo==as.mo(species)) %>% pull(genus) # try using genus
       rule_prefix <- organism_codes %>% filter(mo==as.mo(genus)) %>% pull(Prefix)
     }
-    if (is_empty(rule_prefix)) {
+    if (rlang::is_empty(rule_prefix)) {
       stop(paste("Could not determine valid rule ID prefix to use based on the species name:", species, "- please specify directly using 'rule_prefix'"))
     }
     else{cat(paste("  Determined rule ID prefix:",rule_prefix,"\n"))}

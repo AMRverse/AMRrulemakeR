@@ -16,7 +16,8 @@ Imports:
   	tidyr,
   	magrittr
 Depends: 
-    R (>= 3.5)
+    R (>= 3.5),
+    rlang
 LazyData: true
 RoxygenNote: 7.3.3
 Roxygen: list(markdown = TRUE)
