@@ -67,9 +67,7 @@ makerules <- function(amrrules, minObs=3, low_threshold=20, core_threshold=0.9,
 
   antibiotic <- amrrules$antibiotic
 
-  species <- amrrules$species
-
-  cat(paste("Generating AMRrules for", antibiotic, "in", species,"\n"))
+  cat(paste("Generating AMRrules for", antibiotic, "in", amrrules$species,"\n"))
 
   cat(" Checking parameters\n")
   check_ruleID_start <- as.integer(ruleID_start)
@@ -77,13 +75,16 @@ makerules <- function(amrrules, minObs=3, low_threshold=20, core_threshold=0.9,
 
   # check if we have a valid ruleID prefix
   if(is.null(rule_prefix)) {
-    rule_prefix <- organism_codes %>% filter(mo==as.mo(species)) %>% pull(Prefix) # try using species
+    cat ("Determining rule prefix\n")
+    rule_prefix <- organism_codes %>% filter(mo==as.mo(amrrules$species)) %>% pull(Prefix) # try using species
     if (rlang::is_empty(rule_prefix)) {
-      genus <- microorganisms %>% filter(mo==as.mo(species)) %>% pull(genus) # try using genus
+      cat ("Species not in organism code list, checking for genus")
+      genus <- AMR::microorganisms %>% filter(mo==as.mo(amrrules$species)) %>% pull(genus) # try using genus
+      cat(paste(genus, "\n"))
       rule_prefix <- organism_codes %>% filter(mo==as.mo(genus)) %>% pull(Prefix)
     }
     if (rlang::is_empty(rule_prefix)) {
-      stop(paste("Could not determine valid rule ID prefix to use based on the species name:", species, "- please specify directly using 'rule_prefix'"))
+      stop(paste("Could not determine valid rule ID prefix to use based on the species name:", amrrules$species, "- please specify directly using 'rule_prefix'"))
     }
     else{cat(paste("  Determined rule ID prefix:",rule_prefix,"\n"))}
   }
@@ -107,7 +108,7 @@ makerules <- function(amrrules, minObs=3, low_threshold=20, core_threshold=0.9,
 
   if (use_mic) {
     if (is.null(mic_S) | is.null(mic_R)) { # determine MIC breakpoints
-      bp <-checkBreakpoints(species, guide, antibiotic, bp_site, assay="MIC")
+      bp <-checkBreakpoints(amrrules$species, guide, antibiotic, bp_site, assay="MIC")
       mic_S <- bp$breakpoint_S
       mic_R <- bp$breakpoint_R
       bp_standard_mic <- bp$bp_standard
@@ -115,7 +116,7 @@ makerules <- function(amrrules, minObs=3, low_threshold=20, core_threshold=0.9,
     else{cat(paste("  Using user-specified MIC breakpoints: S <=", mic_S,"and R >", mic_R,"\n"))}
 
     if (is.null(mic_ecoff)) { # determine MIC ECOFF
-      ecoffs <- getBreakpoints(species, guide, antibiotic, "ECOFF") %>% filter(method=="MIC")
+      ecoffs <- getBreakpoints(amrrules$species, guide, antibiotic, "ECOFF") %>% filter(method=="MIC")
       if (nrow(ecoffs)==0) {
         cat("  Could not determine MIC ECOFF using AMR package, using S breakpoint, consider providing your own value via 'mic_ecoff'\n")
         mic_ecoff <- mic_S
@@ -149,7 +150,7 @@ makerules <- function(amrrules, minObs=3, low_threshold=20, core_threshold=0.9,
   if (use_disk) {
 
     if (is.null(disk_S) | is.null(disk_R)) { # determine disk diffusion breakpoints
-      bp <-checkBreakpoints(species, guide, antibiotic, bp_site, assay="DISK")
+      bp <-checkBreakpoints(amrrules$species, guide, antibiotic, bp_site, assay="DISK")
       disk_S <- bp$breakpoint_S
       disk_R <- bp$breakpoint_R
       bp_standard_disk <- bp$bp_standard
@@ -157,7 +158,7 @@ makerules <- function(amrrules, minObs=3, low_threshold=20, core_threshold=0.9,
     else{cat(paste("  Using user-specified disk breakpoints: S >=", disk_S,"and R <", disk_R,"\n"))}
 
     if (is.null(disk_ecoff)) { # determine disk ECOFF
-      ecoffs <- getBreakpoints(species, guide, antibiotic, "ECOFF") %>% filter(method=="DISK")
+      ecoffs <- getBreakpoints(amrrules$species, guide, antibiotic, "ECOFF") %>% filter(method=="DISK")
       if (nrow(ecoffs)==0) {
         cat("  Could not determine disk ECOFF using AMR package, using S breakpoint, consider providing your own value via 'disk_ecoff'\n")
         disk_ecoff <- disk_S
@@ -180,8 +181,8 @@ makerules <- function(amrrules, minObs=3, low_threshold=20, core_threshold=0.9,
   # check if this drug is an expected R or I in this species
   # only check if parameters are null, otherwise accept what user has set
   if (is.null(expected_R)) {
-    expected_R <- as.ab(antibiotic) %in% (AMR::intrinsic_resistant %>% filter(mo==as.mo(species)) %>% pull(ab))
-    if (expected_R) {cat(paste(" ",antibiotic,"is an expected resistance for",species,"\n"))}
+    expected_R <- as.ab(antibiotic) %in% (AMR::intrinsic_resistant %>% filter(mo==as.mo(amrrules$species)) %>% pull(ab))
+    if (expected_R) {cat(paste(" ",antibiotic,"is an expected resistance for",amrrules$species,"\n"))}
   } else if (expected_R) {cat("  User has specified this is not an expected R\n")
   } else if (!expected_R) {cat("  User has specified this is not an expected R\n")}
   if (is.null(expected_I)) {
@@ -190,7 +191,7 @@ makerules <- function(amrrules, minObs=3, low_threshold=20, core_threshold=0.9,
       if (!is.null(mic_S)) {if (mic_S==0.001) {expected_I <- TRUE}}
       if (!is.null(disk_S)) {if (disk_S==50) {expected_I <- TRUE}}
     }
-    if (expected_I) {cat(paste(" ",antibiotic,"is an expected I for",species, "(there is no S category)\n"))}
+    if (expected_I) {cat(paste(" ",antibiotic,"is an expected I for",amrrules$species, "(there is no S category)\n"))}
   } else if (expected_I) {cat("  User has specified this is not an expected I\n")
   } else if (!expected_I) {cat("  User has specified this is not an expected I\n")}
 
@@ -492,7 +493,11 @@ makerules <- function(amrrules, minObs=3, low_threshold=20, core_threshold=0.9,
   gene_info <- amrrules$afp_hits %>%
     left_join(pubmed, by="Gene symbol") %>%
     #mutate(context=if_else(freq>core_threshold, "core", "accessory")) %>% # need to review wrt manual rules and hierarchy
-    mutate(mutation=if_else(is.na(mutation), "-", mutation)) %>%
+    #mutate(mutation=if_else(is.na(mutation), "-", mutation)) %>%
+    mutate(mutation=case_when(is.na(mutation) ~ "-",
+                              `variation type`=="Protein variant detected" ~ paste0("p.",mutation),
+                              `variation type`=="Nucleotide variant detected" ~ paste0("c.",mutation),
+                              TRUE ~ mutation)) %>%
     mutate(marker=as.character(marker.label)) %>% # to match HGVS formatted labels in the input stats
     ungroup() %>%
     select(marker, freq, freq_n, mutation, node, `variation type`, PMID) %>% # exclude context
@@ -504,7 +509,7 @@ makerules <- function(amrrules, minObs=3, low_threshold=20, core_threshold=0.9,
 
   data <- data %>% left_join(gene_info, by="marker") %>%
     mutate(gene=if_else(marker_count>1, gene, node)) %>% # pull gene from ruleID combination for combo rules, otherwise node name from gene_info
-    mutate(organism = paste0("s__",AMR::mo_fullname(as.mo(species)))) %>%
+    mutate(organism = paste0("s__",AMR::mo_fullname(as.mo(amrrules$species)))) %>%
     mutate(drug=AMR::ab_name(as.ab(antibiotic)))
 
   data <- data %>%
@@ -577,7 +582,7 @@ makerules <- function(amrrules, minObs=3, low_threshold=20, core_threshold=0.9,
   rules <- data %>%
     mutate(date_stamp=format(Sys.time(), "%Y-%m-%d %H:%M:%S")) %>%
     mutate(`evidence code`=if_else(!is.na(`clinical category`), "ECO:0001103 natural variation mutant evidence", "")) %>%
-    mutate(`gene context` = "acquired") %>% # assume for now, could check frequency to confirm core genes, but need to merge nodes
+    mutate(`gene context` = "PLEASE COMPLETE") %>%
     mutate(`drug class` = "-") %>%
     select(ruleID, organism, gene, node, mutation, `variation type`, `gene context`,
            drug, `drug class`, phenotype, `clinical category`,
