@@ -78,7 +78,7 @@ makerules <- function(amrrules, minObs=3, low_threshold=20, core_threshold=0.9,
     cat ("Determining rule prefix\n")
     rule_prefix <- organism_codes %>% filter(mo==as.mo(amrrules$species)) %>% pull(Prefix) # try using species
     if (rlang::is_empty(rule_prefix)) {
-      cat ("Species not in organism code list, checking for genus")
+      cat ("Species not in organism code list, checking for genus ")
       genus <- AMR::microorganisms %>% filter(mo==as.mo(amrrules$species)) %>% pull(genus) # try using genus
       cat(paste(genus, "\n"))
       rule_prefix <- organism_codes %>% filter(mo==as.mo(genus)) %>% pull(Prefix)
@@ -579,12 +579,16 @@ makerules <- function(amrrules, minObs=3, low_threshold=20, core_threshold=0.9,
     data <- data %>% mutate(`breakpoint condition` = if_else(breakpoint!="", bp_site, "-"))
   } else{ data$`breakpoint condition`="-"}
 
+  ncbi_taxid <- taxid_bacteria %>% filter(name_txt==amrrules$species) %>% pull(tax_id)
+  if (is_empty(ncbi_taxid)) {ncbi_taxid <- "CHECK"}
+
   rules <- data %>%
+    mutate(txid=ncbi_taxid) %>%
     mutate(date_stamp=format(Sys.time(), "%Y-%m-%d %H:%M:%S")) %>%
     mutate(`evidence code`=if_else(!is.na(`clinical category`), "ECO:0001103 natural variation mutant evidence", "")) %>%
-    mutate(`gene context` = "PLEASE COMPLETE") %>%
+    mutate(`gene context` = "CHECK") %>%
     mutate(`drug class` = "-") %>%
-    select(ruleID, organism, gene, node, mutation, `variation type`, `gene context`,
+    select(ruleID, txid, organism, gene, node, mutation, `variation type`, `gene context`,
            drug, `drug class`, phenotype, `clinical category`,
            breakpoint, `breakpoint standard`, `breakpoint condition`,
            ecoff, `ecoff standard`, PMID,
