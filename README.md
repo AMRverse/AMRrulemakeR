@@ -475,3 +475,313 @@ azi_rules$predict_vs_obs_stats$plot_ecoff
 azi_rules$predict_vs_obs_stats_byMethod$plot_ecoff
 azi_rules$predict_vs_mic_dist_byMethod$pred_ecoff
 ```
+
+### Running a full analysis for a given species
+
+To draft a full set of rules for a given species, it is suggested to summarise all the available ast + geno data, and use this to create a table of drugs to analyse, with all the necessary run parameters. Then use this parater table to make rules sequentially for each drug in the list, incrementing the ruleIDs for each new analysis so you end up with a set of rules files that have non-overlapping ruleIDs and can ultimately be concatenated to make a single set of proposed.
+
+Suggested code to help do this:
+
+1. Summarise available data per drug
+```
+# data per drug
+data_per_drug <- ast %>% 
+  mutate(method = if_else(!is.na(disk), "Disk", method)) %>%
+  group_by(drug_agent, method) %>% count() %>% 
+  pivot_wider(id_cols=drug_agent, names_from=method, values_from = n, values_fill=0) %>%
+  mutate(n=sum(c_across(where(is.numeric)), na.rm = TRUE)) %>%
+  mutate(n_mic=sum(c_across(c(`BD Phoenix`:`microbroth dilution`, Microscan)))) %>%
+  mutate(n_disk=Disk) %>%
+  mutate(n_measure=sum(c_across(n_mic:n_disk))) %>%
+  mutate(n_SIR=`NA`) %>%
+  mutate()
+
+# breakpoints per drug
+breakpoints <- tibble()
+for (drug in data_per_drug$drug_agent) {
+  breakpoints <- bind_rows(breakpoints, getBreakpoints(species="Escherichia coli", antibiotic=drug, type_filter="human", guide="EUCAST 2025"))
+  breakpoints <- bind_rows(breakpoints, getBreakpoints(species="Escherichia coli", antibiotic=drug, type_filter="human", guide="CLSI 2025"))
+  breakpoints <- bind_rows(breakpoints, getBreakpoints(species="Escherichia coli", antibiotic=drug, type_filter="ECOFF"))
+}
+
+# drugs with different S or R breakpoints (i.e. for different sites)
+multi_S <- breakpoints %>% group_by(guideline, ab, method) %>% summarise(s=length(unique(breakpoint_S))) %>% filter(s>1)
+multi_R <- breakpoints %>% group_by(guideline, ab, method) %>% summarise(r=length(unique(breakpoint_R))) %>% filter(r>1)
+  
+# full set of breakpoints by site, method and guide
+breakpoints_wide <- breakpoints %>% 
+  mutate(breakpoint_description=paste(guideline, method, site)) %>% select(ab, breakpoint_description, breakpoint_S, breakpoint_R) %>%
+  pivot_longer(cols=breakpoint_S:breakpoint_R) %>%
+  mutate(breakpoint_description = paste(breakpoint_description, name)) %>% select(-name) %>%
+  pivot_wider(names_from=breakpoint_description, values_from=value)
+
+# simple breakpoints, first per guideline and method
+
+breakpoints_simple_S_MIC <- breakpoints %>% filter(method=="MIC") %>%
+    mutate(description=if_else(type=="ECOFF", "ECOFF MIC", paste(guideline, method, "S"))) %>%
+    select(ab, description, breakpoint_S) %>% 
+    pivot_wider(names_from=description, values_from=breakpoint_S, values_fn=~max(.x, na.rm=T))
+  
+breakpoints_simple_S_disk <- breakpoints %>% filter(method=="DISK") %>%
+    mutate(description=if_else(type=="ECOFF", "ECOFF DISK", paste(guideline, method, "S"))) %>%
+    select(ab, description, breakpoint_S) %>% 
+    pivot_wider(names_from=description, values_from=breakpoint_S, values_fn=~min(.x, na.rm=T))
+
+breakpoints_simple_R_MIC <- breakpoints %>% filter(method=="MIC" & type !="ECOFF") %>%
+    mutate(description=paste(guideline, method, "R")) %>%
+    select(ab, description, breakpoint_R) %>% 
+    pivot_wider(names_from=description, values_from=breakpoint_R, values_fn=~max(.x, na.rm=T))
+  
+breakpoints_simple_R_disk <- breakpoints %>% filter(method=="DISK" & type !="ECOFF") %>%
+    mutate(description=paste(guideline, method, "R")) %>%
+    select(ab, description, breakpoint_R) %>% 
+    pivot_wider(names_from=description, values_from=breakpoint_R, values_fn=~min(.x, na.rm=T))
+
+data_per_drug_summary <- data_per_drug %>% 
+  left_join(breakpoints_simple_S_MIC, join_by(drug_agent==ab)) %>%
+  left_join(breakpoints_simple_R_MIC, join_by(drug_agent==ab)) %>%
+  left_join(breakpoints_simple_S_disk, join_by(drug_agent==ab)) %>%
+  left_join(breakpoints_simple_R_disk, join_by(drug_agent==ab)) %>%
+  mutate(multiS=if_else(drug_agent %in% multi_S$ab, TRUE, FALSE)) %>%
+  mutate(multiR=if_else(drug_agent %in% multi_R$ab, TRUE, FALSE)) %>%
+  mutate(drug_name=ab_name(drug_agent)) %>%
+  relocate(drug_name, .after=drug_agent)
+
+data_per_drug_full <- left_join(data_per_drug_summary, breakpoints_wide, join_by(drug_agent==ab))
+
+write_tsv(data_per_drug_full, file="data_per_drug_full.tsv")
+```
+
+Generate a table summarising the drugs and associated parameters to generate rules with, for all drugs that have EUCAST breakpoints and at least 1000 samples with assay measures, or drugs that we want to 'rescue' and include even though they have less data, because they have EUCAST breakpoints and we think there is enough data to at least explore.
+
+``` {r}
+# antibiotic, class, bp_site, use_mic, mic_S, mic_R, use_disk, disk_S, disk_R
+# breakpoint site, mic_S, mic_R can be left blank (NA) if there is a single EUCAST breakpoint
+
+# drugs to include even though they have too few samples, because they are clinically relevant (have EUCAST breakpoints)
+rescue_list <- as.ab(c("TCC","TEM","CEC","CFM","CPT","CZA","IMR", "MEV","NOR","MFX","OFX"))
+
+run_params_eucast <- data_per_drug_full %>% 
+  filter(!(drug_agent %in% c("NAL", "FOX"))) %>% # exclude these screening drugs
+  filter(n_measure>1000 | drug_agent %in% rescue_list) %>% # only considering drugs with at least 1000 MIC or disk measurements
+  mutate(use_mic=if_else(n_mic>=20 & (!is.na(`EUCAST 2025 MIC S`) | !is.na(`ECOFF MIC`)), TRUE, FALSE)) %>% # if we have MIC data and ecoff or breakpoint
+  mutate(mic_S=if_else(is.na(`EUCAST 2025 MIC S`) & !is.na(`ECOFF MIC`), `ECOFF MIC`, NA)) %>% # use ECOFF if no breakpoint
+  mutate(mic_R=if_else(is.na(`EUCAST 2025 MIC R`) & !is.na(`ECOFF MIC`), `ECOFF MIC`, NA)) %>% # use ECOFF if no breakpoint
+  mutate(use_disk=if_else(n_disk>=20 & (!is.na(`EUCAST 2025 DISK S`) | !is.na(`ECOFF DISK`)), TRUE, FALSE)) %>% # if we have disk data and ecoff or breakpoint
+  mutate(disk_S=if_else(is.na(`EUCAST 2025 DISK S`) & !is.na(`ECOFF DISK`), `ECOFF DISK`, NA)) %>% # use ECOFF if no breakpoint
+  mutate(disk_R=if_else(is.na(`EUCAST 2025 DISK R`) & !is.na(`ECOFF DISK`), `ECOFF DISK`, NA)) %>%
+  filter(use_disk | use_mic) # exclude those with no data or no breakpoint
+
+  
+# for those with multiple (condition-specific) breakpoints, explore which we should use
+breakpoints %>% filter(ab %in% multi_S$ab & guideline=="EUCAST 2025") %>% select(ab, method, site, breakpoint_S, breakpoint_R)
+
+sites <- tibble(drug_agent=as.ab("CIP"), bp_site=c("Non-meningitis")) %>% # cipro, meningitis breakpoint is set to identify presence of resistance mechanisms, which we can achieve directly and through comparison to ECOFF
+  bind_rows(tibble(drug_agent=as.ab("AMX"), bp_site=c("Intravenous"))) %>% # amoxicillin, other breakpoints are the same or equate to expected 'I'
+  bind_rows(tibble(drug_agent=as.ab("AMC"), bp_site=c("Oral, Uncomplicated urinary tract infection"))) %>% # amoxi-clav, don't need iv breakpoint because same as ECOFF, don't need other oral breakpoints as they equate to expected 'I'
+  bind_rows(tibble(drug_agent=as.ab("CXM"), bp_site=c("Uncomplicated urinary tract infection"))) # cefuroxime, don't need iv breakpoint as it amounts to expected 'I'
+
+# make table of drugs to analyse, with their run parameters
+run_params_eucast <- run_params_eucast %>% 
+  select(drug_agent, use_mic, mic_S, mic_R, use_disk, disk_S, disk_R) %>% 
+  left_join(sites) %>%
+  mutate(mic_S=if_else(!is.na(bp_site), NA, mic_S)) %>% # don't specify the breakpoint if there are multiple defined
+  mutate(mic_R=if_else(!is.na(bp_site), NA, mic_R)) %>%
+  mutate(disk_S=if_else(!is.na(bp_site), NA, disk_S)) %>%
+  mutate(disk_R=if_else(!is.na(bp_site), NA, disk_R))
+
+> run_params_eucast
+# A tibble: 49 × 8
+# Groups:   drug_agent [49]
+   drug_agent use_mic mic_S mic_R use_disk disk_S disk_R bp_site                                    
+   <ab>       <lgl>   <dbl> <dbl> <lgl>     <dbl>  <dbl> <chr>                                      
+ 1 AMC        TRUE    NA    NA    TRUE         NA     NA Oral, Uncomplicated urinary tract infection
+ 2 AMK        TRUE    NA    NA    TRUE         NA     NA NA                                         
+ 3 AMP        TRUE    NA    NA    TRUE         NA     NA NA                                         
+ 4 AMX        TRUE    NA    NA    FALSE        NA     NA Intravenous                                
+ 5 ATM        TRUE    NA    NA    TRUE         NA     NA NA                                         
+ 6 AZM        TRUE    16    16    FALSE        NA     NA NA                                         
+ 7 BPR        TRUE     0.25  0.25 FALSE        NA     NA NA                                         
+ 8 CAZ        TRUE    NA    NA    TRUE         NA     NA NA                                         
+ 9 CCV        TRUE     0.5   0.5  FALSE        NA     NA NA                                         
+10 CFM        TRUE    NA    NA    TRUE         NA     NA NA                                         
+# ℹ 39 more rows
+# ℹ Use `print(n = ...)` to see more rows
+```
+
+
+Now we need to make a list of which AMRfinderplus classes to consider, for each drug. This has to be done manually currently, until we sort out a proper mapping of AMR package terms to AMRfp classes, and the fact that some drugs map to multiple classes (e.g. to analyse ampicillin phenotypes, you neeed to include markers in 3 classes: `Beta-lactams/penicillins`, `Carbapenems`, `Cephalosporins`. 
+
+So for now it's best to do this manually and thoughtfully! You can use this table in the AMRgen package to help, but it may not be complete: `AMRgen::amrfp_drugs_table`
+
+What you need to do is make a table that looks like this, for each drug in your `run_params_eucast` table:
+
+```
+> drug_to_amrfp_class
+# A tibble: 74 × 5
+   drug_agent drug_name                   AMRfp_class              class2      class3        
+   <ab>       <chr>                       <chr>                    <chr>       <chr>         
+ 1 TOB        Tobramycin                  Aminoglycosides          NA          NA            
+ 2 GEN        Gentamicin                  Aminoglycosides          NA          NA            
+ 3 AMK        Amikacin                    Aminoglycosides          NA          NA            
+ 4 STR        Streptoduocin               Aminoglycosides          NA          NA            
+ 5 STR1       Streptomycin                Aminoglycosides          NA          NA            
+ 6 KAN        Kanamycin                   Aminoglycosides          NA          NA            
+ 7 CHL        Chloramphenicol             Amphenicols              NA          NA            
+ 8 AMP        Ampicillin                  Beta-lactams/penicillins Carbapenems Cephalosporins
+ 9 AMC        Amoxicillin/clavulanic acid Beta-lactams/penicillins Carbapenems Cephalosporins
+10 TZP        Piperacillin/tazobactam     Beta-lactams/penicillins Carbapenems Cephalosporins
+```
+
+Then use this to make a list of classes, and add this list to you run_params_eucast table
+```
+drug_to_amrfp_class <- drug_to_amrfp_class %>% 
+  mutate(classes=if_else(!is.na(class2), paste(AMRfp_class,class2,class3,sep=","), AMRfp_class))
+
+run_params_eucast <- run_params_eucast %>% 
+  left_join(drug_to_amrfp_class %>% select(drug_agent, classes))
+
+```
+
+The `makerules` function checks whether each drug has expected resistance, by checking the `AMR::intrinsic_resistant` table. If a drug is noted in this table, then any calls other than 'R' will be flagged for review in the generated rules table. To override this, you need to pass `expected_R=FALSE` to the `makerules` function, so record this parameter in the run params table:
+
+```
+# manually overrule AMR::intrinsic_resistant that Enterobacterales are expected R to azithromycin, so we can call S/R from data
+run_params_eucast <- run_params_eucast %>% mutate(expected_R=if_else(drug_agent=="AZM", FALSE, NA))
+```
+
+So now we have a table of all the drug-specific run parameters. 
+
+Next let's set up all our fixed parameters, that will apply to all drugs:
+```
+# for geno/pheno analyses
+species <- "Escherichia coli"
+sir_col <- "pheno_eucast"
+ecoff_col <- "ecoff"
+geno_sample_col <- "Name"
+pheno_sample_col <- "id"
+minPPV <- 1
+mafLogReg <- 5
+mafUpset <- 1
+marker_col <- "marker"
+
+info_obj <- ast %>% select(id, source, method)
+
+# for rule definitions
+minObs <- 1
+low_threshold <-20
+
+# where should we start when numbering the new rules? make sure this is higher than the number of rules you currently have defined.
+max_rule_id <- c(999)
+
+# helper function to convert NA values from our run_params table to `NULL` values for our function call
+na2null <- function(x) {
+  if(is.na(x)) {return(NULL)}
+  else{return(x)}
+  }
+```
+
+Run analysis on all our rules. Note the code below uses the default settings for amrrules_save() which includes using the drafted rules to predict phenotypes. This step can take a long time if you have a lot of markers, if you don't need it then consider turning it off by setting `testRules=FALSE` in the amrrules_save() call.
+```
+for (i in 1:nrow(run_params_eucast)) {
+  
+  # run the analysis, including blaEC
+  analysis <- amrrules_analysis(afp, ast, antibiotic=ab_name(run_params_eucast$drug_agent[i]),
+                                drug_class_list=unlist(strsplit(run_params_eucast$classes[i], ",")),
+                                species=species, sir_col=sir_col, ecoff_col=ecoff_col, 
+                                geno_sample_col=geno_sample_col, 
+                                pheno_sample_col=pheno_sample_col, 
+                                minPPV=1, mafLogReg=5, mafUpset=1, info=info_obj,
+                                use_mic=run_params_eucast$use_mic[i],
+                                mic_S=na2null(run_params_eucast$mic_S[i]),
+                                mic_R=na2null(run_params_eucast$mic_R[i]),
+                                use_disk=run_params_eucast$use_disk[i],
+                                disk_S=na2null(run_params_eucast$disk_S[i]),
+                                disk_R=na2null(run_params_eucast$disk_R[i]),
+                                call_manual=TRUE # recall SIR based on provided breakpoints
+                                )
+  
+  # store the results and generate rules
+  if (!is.na(run_params_eucast$bp_site[i])) {
+    file_prefix <- paste0(gsub("/","_",ab_name(run_params_eucast$drug_agent[i])),"_",gsub(",","",run_params_eucast$bp_site[i]))
+    }
+  else{file_prefix=NULL}
+  
+  rules <- amrrules_save(analysis, dir_path="amrrulesEcoliFeb4", 
+                         ruleID_start=(max_rule_id+1), 
+                         minObs=minObs, low_threshold=low_threshold,
+                         use_mic=run_params_eucast$use_mic[i],
+                         mic_S=na2null(run_params_eucast$mic_S[i]),
+                         mic_R=na2null(run_params_eucast$mic_R[i]),
+                         use_disk=run_params_eucast$use_disk[i],
+                         disk_S=na2null(run_params_eucast$disk_S[i]),
+                         disk_R=na2null(run_params_eucast$disk_R[i]),
+                         bp_site=na2null(run_params_eucast$bp_site[i]),
+                         expected_R=na2null(run_params_eucast$expected_R[i]),
+                         file_prefix=file_prefix)
+  
+  # update rule ID for next drug
+  next_rule_id <- max(rules$rules$ruleID) %>% gsub(pattern="ECO", replacement="") %>% as.numeric()
+  check_next_rule_id <- as.integer(next_rule_id)
+  if(is.na(check_next_rule_id)) {max_rule_id <- max_rule_id+1000}
+  else{max_rule_id = next_rule_id}
+ 
+}
+```
+
+### Other considerations
+
+#### Core genes with WT S
+If there are core genes in AMRfinderplus that definitely have no impact on phenotype, these will interfere with our ability to consider solo PPV for other markers in the same class, as those other markers will hardly ever be found 'solo' without the irrelevant core gene. E.g. in E. coli, blaEC is called in nearly every genome, but has no effect on ampicillin.
+
+In this case, it makes sense to exclude the irrelevant core gene. Note this should only be done after you have confirmed the gene has no effect, even in combination with others, by running the analysis with it included first. But, if you are confident the gene is irrelevant, filter it out of your genotype file and then run the analysis on this filtered file:
+```
+afp_exclBlaEC <- afp %>% filter(!grepl("blaEC", gene))
+```
+
+#### Impact of allelic variation amongst gene detection hits
+For some genes where we are interested in presence/absence (i.e. detection), the AMRfinderplus database has multiple protein sequences that map to the same element symbol. E.g. refgene has 3 entries for [cmlA1](https://www.ncbi.nlm.nih.gov/pathogens/refgene/#cmlA1) which each have different reference protein sequences but map to the same node [cmlA1](https://www.ncbi.nlm.nih.gov/pathogens/genehierarchy/#node_id:cmlA1) in the gene hierarchy and are reported in AMRfinderplus results with the same element symbol `cmlA1`.
+This means that where we see `cmlA1` in the `element symbol` (v4+) or `gene symbol` (pre-v4) field in AMRfinderplus results, (which via `import_amrfp` we represent as `node`='cmlA1', variation type='Gene presence detected', `marker.label`='cmlA1'), this may actually describe different allelic variants. Also, by default `import_amrfp` does not consider coverage and identity of hits, it just relies on AMRfinderplus to tell us if a hit is 'partial' (defined as <90% coverage) in which case the variation type will be called as 'Inactivating mutation detected' and the marker.label will be 'cmlA1:-' to indicate a partial hit.
+By default, AMRgen and AMRrulemaker functions will use the 'marker.label' field as the unit for analysis, which is potentially grouping together several different allelic variants and comparing them as a group to the phenotype results (although excluding partial/broken hits). This will often be sensible, but it may be problematic if the different alleles actually have different functions.
+To explore this, we can define a new 'marker.label' based on the closest reference sequence, and whether the match is identical or not to this, and then re-run the quantitative analysis and rule definitions using this alternative unit of analysis.
+
+```
+# define new marker labels
+afp_accession <- afp %>% 
+    mutate(exact_match=if_else(`% Coverage of reference sequence`==100 & `% Identity to reference sequence`==100.00, "", "x_")) %>%
+    mutate(node_hit = paste0(node, "__", exact_match, `Accession of closest sequence`)) %>%
+    mutate(marker.label = case_when(`variation type`=="Inactivating mutation detected" ~ paste0(node_hit,":-"),
+                                    !is.na(mutation) ~ paste0(node_hit, ":", mutation),
+                                    TRUE ~ node_hit
+      
+    ))
+
+```
+In this example in E. coli, we now have 5 different marker labels for hits to cmlA1, most are identical matches to the same reference protein (cmlA1__WP_000095725.1), but there are also inexact matches to this reference (cmlA1__x_WP_000095725.1), exact matches to an alternative allele (cmlA1__WP_001256776.1), and broken hits to both of these references (which would in the initial analysis have been grouped as 'cmlA1:-', as distinct from 'cmlA1'):
+```
+afp_accession %>% filter(grepl("cmlA1",marker.label)) %>% count(marker.label)
+# A tibble: 5 × 2
+  marker.label                  n
+  <chr>                     <int>
+1 cmlA1__WP_000095725.1       350
+2 cmlA1__WP_001256776.1         8
+3 cmlA1__x_WP_000095725.1      46
+4 cmlA1__x_WP_000095725.1:-    12
+5 cmlA1__x_WP_001256776.1:-    11
+```
+
+Running the chloramphenicol analysis on this new version of the genotyping table, we get separate PPVs for each of these types of hits, and see that while the evidence is strong for exact matches to the WP_000095725.1 reference sequence (positive predictive value 88.7% for R and 92.2% for NWT), neither of the 2 genomes that had exact matches to WP_001256776 and callable SIR phenotypes were called as R. Of the strains with inexact matches to WP_000095725.1 (cmlA1__x_WP_000095725.1), 3/5 were R and 4/6 were NWT. None of the genomes with broken hits were R, which is what we would expect.
+```
+> chloramphenicol %>% filter(grepl("cmlA1", marker))
+# A tibble: 8 × 8
+  marker                    category     x     n   ppv     se ci.lower ci.upper
+  <chr>                     <chr>    <dbl> <dbl> <dbl>  <dbl>    <dbl>    <dbl>
+1 cmlA1__WP_000095725.1     R           86    97 0.887 0.0322    0.823    0.950
+2 cmlA1__WP_001256776.1     R            0     2 0     0         0        0    
+3 cmlA1__x_WP_000095725.1   R            3     5 0.6   0.219     0.171    1    
+4 cmlA1__x_WP_000095725.1:- R            0     1 0     0         0        0    
+5 cmlA1__x_WP_001256776.1:- R            0     3 0     0         0        0    
+6 cmlA1__WP_000095725.1     NWT         94   102 0.922 0.0266    0.869    0.974
+7 cmlA1__WP_001256776.1     NWT          1     3 0.333 0.272     0        0.867
+8 cmlA1__x_WP_000095725.1   NWT          4     6 0.667 0.192     0.289    1 
+```
