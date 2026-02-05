@@ -340,12 +340,12 @@ amrrules_save <- function(amrrules, width=9, height=9, dir_path, outdir_name=NUL
   # write out reference and observed distributions
   if (!is.null(amrrules$reference_mic_plot)) {safe_execute(ggsave(amrrules$reference_mic_plot, filename=paste0(outpath_dist,"_reference_mic_plot.pdf"), width=width, height=height))}
   if (!is.null(amrrules$reference_disk_plot)) {safe_execute(ggsave(amrrules$reference_disk_plot, filename=paste0(outpath_dist,"_reference_disk_plot.pdf"), width=width, height=height))}
-  if (!is.null(amrrules$input_mic_sir_plot$plot)) {safe_execute(ggsave(amrrules$input_mic_sir_plot$plot, filename=paste0(outpath_dist,"_inputMIC_bySIR.pdf"), width=width, height=height))}
-  if (!is.null(amrrules$input_mic_sir_plot_bymethod$plot)) {safe_execute(ggsave(amrrules$input_mic_sir_plot_bymethod$plot, filename=paste0(outpath_dist,"_inputMIC_bySIR_byMethod.pdf"), width=width, height=height))}
-  if (!is.null(amrrules$input_mic_nwt_plot_bymethod$plot)) {safe_execute(ggsave(amrrules$input_mic_nwt_plot_bymethod$plot, filename=paste0(outpath_dist,"_inputMIC_byNWT_byMethod.pdf"), width=width, height=height))}
-  if (!is.null(amrrules$input_disk_sir_plot$plot)) {safe_execute(ggsave(amrrules$input_disk_sir_plot$plot, filename=paste0(outpath_dist,"_inputDisk_bySIR.pdf"), width=width, height=height))}
-  if (!is.null(amrrules$input_disk_sir_plot_bymethod$plot)) {safe_execute(ggsave(amrrules$input_disk_sir_plot_bymethod$plot, filename=paste0(outpath_dist,"_inputDisk_bySIR_byMethod.pdf"), width=width, height=height))}
-  if (!is.null(amrrules$input_disk_nwt_plot_bymethod$plot)) {safe_execute(ggsave(amrrules$input_disk_nwt_plot_bymethod$plot, filename=paste0(outpath_dist,"_inputDisk_byNWT_byMethod.pdf"), width=width, height=height))}
+  if (!is.null(amrrules$input_mic_sir_plot)) {safe_execute(ggsave(amrrules$input_mic_sir_plot, filename=paste0(outpath_dist,"_inputMIC_bySIR.pdf"), width=width, height=height))}
+  if (!is.null(amrrules$input_mic_sir_plot_bymethod)) {safe_execute(ggsave(amrrules$input_mic_sir_plot_bymethod, filename=paste0(outpath_dist,"_inputMIC_bySIR_byMethod.pdf"), width=width, height=height))}
+  if (!is.null(amrrules$input_mic_nwt_plot_bymethod)) {safe_execute(ggsave(amrrules$input_mic_nwt_plot_bymethod, filename=paste0(outpath_dist,"_inputMIC_byNWT_byMethod.pdf"), width=width, height=height))}
+  if (!is.null(amrrules$input_disk_sir_plot)) {safe_execute(ggsave(amrrules$input_disk_sir_plot, filename=paste0(outpath_dist,"_inputDisk_bySIR.pdf"), width=width, height=height))}
+  if (!is.null(amrrules$input_disk_sir_plot_bymethod)) {safe_execute(ggsave(amrrules$input_disk_sir_plot_bymethod, filename=paste0(outpath_dist,"_inputDisk_bySIR_byMethod.pdf"), width=width, height=height))}
+  if (!is.null(amrrules$input_disk_nwt_plot_bymethod)) {safe_execute(ggsave(amrrules$input_disk_nwt_plot_bymethod, filename=paste0(outpath_dist,"_inputDisk_byNWT_byMethod.pdf"), width=width, height=height))}
 
 
   # subdirectory ppv/
