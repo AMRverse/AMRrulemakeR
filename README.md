@@ -476,13 +476,13 @@ azi_rules$predict_vs_obs_stats_byMethod$plot_ecoff
 azi_rules$predict_vs_mic_dist_byMethod$pred_ecoff
 ```
 
-### Running a full analysis for a given species
+## Running a full analysis for a given species
 
 To draft a full set of rules for a given species, it is suggested to summarise all the available ast + geno data, and use this to create a table of drugs to analyse, with all the necessary run parameters. Then use this parater table to make rules sequentially for each drug in the list, incrementing the ruleIDs for each new analysis so you end up with a set of rules files that have non-overlapping ruleIDs and can ultimately be concatenated to make a single set of proposed.
 
 Suggested code to help do this:
 
-1. Summarise available data per drug
+### Summarise available data per drug
 ```
 # data per drug
 data_per_drug <- ast %>% 
@@ -551,7 +551,7 @@ data_per_drug_full <- left_join(data_per_drug_summary, breakpoints_wide, join_by
 
 write_tsv(data_per_drug_full, file="data_per_drug_full.tsv")
 ```
-
+### Generate a table of run parameters
 Generate a table summarising the drugs and associated parameters to generate rules with, for all drugs that have EUCAST breakpoints and at least 1000 samples with assay measures, or drugs that we want to 'rescue' and include even though they have less data, because they have EUCAST breakpoints and we think there is enough data to at least explore.
 
 ``` {r}
@@ -609,7 +609,7 @@ run_params_eucast <- run_params_eucast %>%
 # ℹ Use `print(n = ...)` to see more rows
 ```
 
-
+### Add the list of genotype classes to consider for each drug
 Now we need to make a list of which AMRfinderplus classes to consider, for each drug. This has to be done manually currently, until we sort out a proper mapping of AMR package terms to AMRfp classes, and the fact that some drugs map to multiple classes (e.g. to analyse ampicillin phenotypes, you neeed to include markers in 3 classes: `Beta-lactams/penicillins`, `Carbapenems`, `Cephalosporins`. 
 
 So for now it's best to do this manually and thoughtfully! You can use this table in the AMRgen package to help, but it may not be complete: `AMRgen::amrfp_drugs_table`
@@ -650,6 +650,7 @@ The `makerules` function checks whether each drug has expected resistance, by ch
 run_params_eucast <- run_params_eucast %>% mutate(expected_R=if_else(drug_agent=="AZM", FALSE, NA))
 ```
 
+### Set up fixed run parameters, and analyse all our drugs in one go
 So now we have a table of all the drug-specific run parameters. 
 
 Next let's set up all our fixed parameters, that will apply to all drugs:
@@ -729,9 +730,9 @@ for (i in 1:nrow(run_params_eucast)) {
 }
 ```
 
-### Other considerations
+## Other considerations
 
-#### Core genes with WT S
+### Core genes with WT S
 If there are core genes in AMRfinderplus that definitely have no impact on phenotype, these will interfere with our ability to consider solo PPV for other markers in the same class, as those other markers will hardly ever be found 'solo' without the irrelevant core gene. E.g. in E. coli, blaEC is called in nearly every genome, but has no effect on ampicillin.
 
 In this case, it makes sense to exclude the irrelevant core gene. Note this should only be done after you have confirmed the gene has no effect, even in combination with others, by running the analysis with it included first. But, if you are confident the gene is irrelevant, filter it out of your genotype file and then run the analysis on this filtered file:
@@ -739,7 +740,7 @@ In this case, it makes sense to exclude the irrelevant core gene. Note this shou
 afp_exclBlaEC <- afp %>% filter(!grepl("blaEC", gene))
 ```
 
-#### Impact of allelic variation amongst gene detection hits
+### Impact of allelic variation amongst gene detection hits
 For some genes where we are interested in presence/absence (i.e. detection), the AMRfinderplus database has multiple protein sequences that map to the same element symbol. E.g. refgene has 3 entries for [cmlA1](https://www.ncbi.nlm.nih.gov/pathogens/refgene/#cmlA1) which each have different reference protein sequences but map to the same node [cmlA1](https://www.ncbi.nlm.nih.gov/pathogens/genehierarchy/#node_id:cmlA1) in the gene hierarchy and are reported in AMRfinderplus results with the same element symbol `cmlA1`.
 This means that where we see `cmlA1` in the `element symbol` (v4+) or `gene symbol` (pre-v4) field in AMRfinderplus results, (which via `import_amrfp` we represent as `node`='cmlA1', variation type='Gene presence detected', `marker.label`='cmlA1'), this may actually describe different allelic variants. Also, by default `import_amrfp` does not consider coverage and identity of hits, it just relies on AMRfinderplus to tell us if a hit is 'partial' (defined as <90% coverage) in which case the variation type will be called as 'Inactivating mutation detected' and the marker.label will be 'cmlA1:-' to indicate a partial hit.
 By default, AMRgen and AMRrulemaker functions will use the 'marker.label' field as the unit for analysis, which is potentially grouping together several different allelic variants and comparing them as a group to the phenotype results (although excluding partial/broken hits). This will often be sensible, but it may be problematic if the different alleles actually have different functions.
