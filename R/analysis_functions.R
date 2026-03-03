@@ -12,7 +12,7 @@
 #' @param drug_class_list A character vector of drug classes whose attributed markers should be included in the analysis.
 #' @param species A string indicating the species name used for breakpoint and reference distribution lookups (e.g., `"E. coli"`).
 #' @param sir_col The name of the trusted S/I/R classification column to use, e.g. inferred from available MIC and/or disk data (default: `"pheno_eucast"`).
-#' @param ecoff_col The name of the column providing S/R calls indicating the classification of each sample and drug against the ECOFF (default: `"ecoff"`).
+#' @param ecoff_col The name of the column providing WT/NWT calls indicating the classification of each sample and drug against the ECOFF (default: `"ecoff"`).
 #' @param sir_provided_col The name of the extended S/I/R classification column, e.g. including calls provided as S/I/R but without assay measures to interpret directly (default: `"pheno_provided"`).
 #' @param geno_sample_col The column in \code{geno_table} with sample IDs (default: `"Name"`).
 #' @param pheno_sample_col The column in \code{pheno_table} with sample IDs (default: `"id"`).
@@ -155,6 +155,22 @@ amrrules_analysis <- function(geno_table, pheno_table, antibiotic, drug_class_li
   cat("\n")
 
 
+  #' Merge SIR-only phenotype rows with MIC/disk-derived phenotype data (tier-2)
+  #'
+  #' This block isolates records that have no MIC and no disk diffusion values,
+  #' treating them as SIR-only phenotype entries.
+  #'
+  #' For those SIR-only rows, it:
+  #' - Renames the provided SIR column to `pheno`.
+  #' - Computes/updates `ecoff` using priority logic:
+  #'   1. Use an existing ECOFF value when available.
+  #'   2. If phenotype is `"I"` or `"R"`, set ECOFF to resistant (`as.sir("R")`).
+  #'   3. If phenotype is `"S"`, set ECOFF to resistant (`as.sir("R")`).
+  #'   4. Otherwise set `ecoff` to `NA`.
+  #'
+  #' Finally, it appends these transformed SIR-only rows to the MIC/disk-derived
+  #' phenotype table after harmonizing column names (`pheno`, `ecoff`), producing
+  #' a combined phenotype/ECOFF dataset.
   ### NEW: merge pheno and ecoff data from MIC/disk values with those from SIR, to give tier-2 info
 
   pheno_table_sir <- pheno_table %>%
@@ -164,8 +180,8 @@ amrrules_analysis <- function(geno_table, pheno_table, antibiotic, drug_class_li
    pheno_table_sir <- pheno_table_sir %>%
     rename(pheno=!!sir_provided_col) %>%
     mutate(ecoff=case_when(!is.na(!!ecoff_col) ~ get(ecoff_col), # define ecoff from SIR if not already done
-                           pheno %in% c("I", "R") ~ as.sir("R"),
-                           pheno %in% c("S") ~ as.sir("R"),
+                           pheno %in% c("I", "R") ~ as.sir("NWT"),
+                           pheno %in% c("S") ~ as.sir("WT"),
                            TRUE ~ NA)) %>%
     bind_rows(pheno_table_micdisk %>% rename(pheno=!!sir_col) %>% rename(ecoff=!!ecoff_col))
 
