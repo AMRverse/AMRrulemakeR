@@ -44,8 +44,13 @@ test_rules_amrfp <- function(geno_table, rules, species) {
   } else { cat(" WARNING: Species provided does not exist in rules file, ignoring species\n")
   }
 
+  # phenotype is set to "REVIEW: expected I" or "REVIEW: expected R" if the category is not as expected
   rules <- rules %>%
     mutate(`clinical category`=factor(`clinical category`, levels=c("S", "I", "R"), ordered=T)) %>%
+    mutate(phenotype=case_when(phenotype == "REVIEW: expected R" ~ "wildtype",
+                               phenotype == "REVIEW: expected I" & `clinical category` != "S" ~ "wildtype",
+                               phenotype %in% c("wildtype", "nonwildtype") ~ phenotype,
+                               TRUE ~ NA)) %>%
     mutate(phenotype=factor(phenotype, levels=c("wildtype", "nonwildtype"), ordered=T))
 
   calls <- geno_table %>%

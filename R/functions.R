@@ -259,7 +259,7 @@ enumerate_source_info <- function(data, info=NULL, solo_binary, amr_binary, colu
                                         paste0(na0(solo.sources.S), " S, ", na0(solo.sources.I), " I, ", na0(solo.sources.R), " R"),
                                         "-"))
     if ("mic.sources" %in% colnames(data) & use_mic) {
-      data <- data %>% mutate(mic.sources.SIR = paste0(na0(mic.sources.S), " S, ", na0(mic.sources.I), " I, ", na0(mic.sources.R)))
+      data <- data %>% mutate(mic.sources.SIR = paste0(na0(mic.sources.S), " S, ", na0(mic.sources.I), " I, ", na0(mic.sources.R), " R"))
     } else {data$mic.sources.SIR <- "-"}
 
     if ("mic.x.sources" %in% colnames(data) & use_mic) {
@@ -326,6 +326,13 @@ categorise_from_PPV <- function(data, suffix="") {
                                                  is.na(get(nwt_ppv)) ~ NA,
                                                  TRUE ~ NA))
   }
+
+  # if no phenotype call, set this from category if available
+  data <- data %>% mutate(phenotype = case_when(!is.na(phenotype) ~ phenotype,
+                                                is.na(phenotype) & category=="I" ~ "NWT",
+                                                is.na(phenotype) & category=="R" ~ "NWT",
+                                                is.na(phenotype) & category=="S" ~ "WT",
+                                                TRUE ~ NA))
 
   # always return with category_suffix and phenotype_suffix columns added with notes
   pheno_colname <- paste0("phenotype",suffix)

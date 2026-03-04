@@ -12,7 +12,7 @@
 #' @param drug_class_list A character vector of drug classes whose attributed markers should be included in the analysis.
 #' @param species A string indicating the species name used for breakpoint and reference distribution lookups (e.g., `"E. coli"`).
 #' @param sir_col The name of the trusted S/I/R classification column to use, e.g. inferred from available MIC and/or disk data (default: `"pheno_eucast"`).
-#' @param ecoff_col The name of the column providing S/R calls indicating the classification of each sample and drug against the ECOFF (default: `"ecoff"`).
+#' @param ecoff_col The name of the column providing WT/NWT calls indicating the classification of each sample and drug against the ECOFF (default: `"ecoff"`).
 #' @param sir_provided_col The name of the extended S/I/R classification column, e.g. including calls provided as S/I/R but without assay measures to interpret directly (default: `"pheno_provided"`).
 #' @param geno_sample_col The column in \code{geno_table} with sample IDs (default: `"Name"`).
 #' @param pheno_sample_col The column in \code{pheno_table} with sample IDs (default: `"id"`).
@@ -78,7 +78,7 @@ amrrules_analysis <- function(geno_table, pheno_table, antibiotic, drug_class_li
   # plot EUCAST reference distributions
   reference_mic <- safe_execute(AMRgen::get_eucast_mic_distribution(antibiotic, species))
   reference_mic <- safe_execute(rep(reference_mic$mic, reference_mic$count))
-  reference_mic_plot <- safe_execute(ggplot2::autoplot(reference_mic, ab = antibiotic, mo = species, title = "EUCAST reference MIC distribtion"))
+  reference_mic_plot <- safe_execute(ggplot2::autoplot(reference_mic, ab = antibiotic, mo = species, title = "EUCAST reference MIC distribution"))
 
   reference_disk <- safe_execute(AMRgen::get_eucast_disk_distribution(antibiotic, species))
   reference_disk <- safe_execute(rep(reference_disk$disk_diffusion, reference_disk$count))
@@ -164,8 +164,8 @@ amrrules_analysis <- function(geno_table, pheno_table, antibiotic, drug_class_li
    pheno_table_sir <- pheno_table_sir %>%
     rename(pheno=!!sir_provided_col) %>%
     mutate(ecoff=case_when(!is.na(!!ecoff_col) ~ get(ecoff_col), # define ecoff from SIR if not already done
-                           pheno %in% c("I", "R") ~ as.sir("R"),
-                           pheno %in% c("S") ~ as.sir("R"),
+                           pheno %in% c("I", "R") ~ as.sir("NWT"),
+                           pheno %in% c("S") ~ as.sir("WT"),
                            TRUE ~ NA)) %>%
     bind_rows(pheno_table_micdisk %>% rename(pheno=!!sir_col) %>% rename(ecoff=!!ecoff_col))
 

@@ -350,15 +350,6 @@ makerules <- function(amrrules, minObs=3, low_threshold=20, core_threshold=0.9,
 
   cat(" Comparing clinical categories\n")
 
-  # if expected R, annotate R calls as wildtype and flag others for review
-  if (expected_R) {
-    data <- data %>% mutate(phenotype_soloPPV=if_else(category_soloPPV=="R", "WT", "REVIEW: expected R")) # R:wt, S/I:review
-  }
-  # if expected I, annotate I/R calls as wildtype and flag others for review
-  else if (expected_I) {
-    data <- data %>% mutate(phenotype_soloPPV=if_else(category_soloPPV  %in% c("I", "R"), "WT", "REVIEW: expected I")) # I/R:wt, S:review
-  }
-
   ## compare calls from different analyses, note discrepancies
   # pay attention to numbers from different analyses, and if they pass minObs
   # assign call based on solo PPV first, where available
@@ -510,7 +501,7 @@ makerules <- function(amrrules, minObs=3, low_threshold=20, core_threshold=0.9,
   data <- data %>% left_join(gene_info, by="marker") %>%
     mutate(gene=if_else(marker_count>1, gene, node)) %>% # pull gene from ruleID combination for combo rules, otherwise node name from gene_info
     mutate(organism = paste0("s__",AMR::mo_fullname(as.mo(amrrules$species)))) %>%
-    mutate(drug=AMR::ab_name(as.ab(antibiotic)))
+    mutate(drug = AMR::ab_name(as.ab(antibiotic)))
 
   data <- data %>%
     rowwise() %>%
@@ -581,6 +572,18 @@ makerules <- function(amrrules, minObs=3, low_threshold=20, core_threshold=0.9,
 
   ncbi_taxid <- taxid_bacteria %>% filter(name_txt==amrrules$species) %>% pull(tax_id)
   if (is_empty(ncbi_taxid)) {ncbi_taxid <- "CHECK"}
+
+  # if expected R, annotate R calls as wildtype and flag others for review
+  if (expected_R) {
+    data <- data %>% mutate(phenotype=if_else(`clinical category`=="R", "wildtype", "REVIEW: expected R")) # R:wt, S/I:review
+  }
+  # if expected I, annotate I/R calls as wildtype and flag others for review
+  else if (expected_I) {
+    data <- data %>% mutate(phenotype=if_else(`clinical category` =="I", "wildtype",
+                                              if_else(`clinical category`=="R", "nonwildtype", phenotype))) # R:wt, S/I:review
+  } else  {
+    data <- data %>% mutate(phenotype=if_else(`clinical category` %in% c("I", "R"), "nonwildtype", phenotype))
+  }
 
   rules <- data %>%
     mutate(txid=ncbi_taxid) %>%
