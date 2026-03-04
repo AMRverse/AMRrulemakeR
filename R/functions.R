@@ -631,7 +631,7 @@ predictive_value <- function(true_vs_predict, sir_col="pheno_eucast", ecoff_col=
       patchwork::plot_annotation("Predicted vs observed (S/I/R calls)")
 
     ecoff_ppv <- true_vs_predict %>%
-      filter(!!sym(ecoff_col) %in% c("S", "R")) %>%
+      filter(!!sym(ecoff_col) %in% c("NWT", "WT")) %>%
       count(!!sym(ecoff_col), phenotype) %>%
       group_by(phenotype) %>% mutate(pct= prop.table(n) * 100) %>%
       arrange(phenotype) %>%
@@ -681,7 +681,7 @@ predictive_value_by_var <- function(true_vs_predict, sir_col="pheno_eucast", eco
     patchwork::plot_annotation("Predicted vs observed (S/I/R calls), by method")
 
   ecoff_ppv <- true_vs_predict %>%
-    filter(!!sym(ecoff_col) %in% c("S", "R")) %>%
+    filter(!!sym(ecoff_col) %in% c("WT", "NWT")) %>%
     count(!!sym(ecoff_col), phenotype, !!sym(var)) %>%
     group_by(phenotype, !!sym(var)) %>% mutate(pct= prop.table(n) * 100) %>%
     arrange(phenotype)

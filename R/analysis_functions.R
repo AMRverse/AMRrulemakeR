@@ -427,11 +427,11 @@ amrrules_save <- function(amrrules, width=9, height=9, dir_path, outdir_name=NUL
         outpath_pred <- file.path(outdir_path_pred, file_prefix)
 
         cat (" Predicting phenotypes by applying rules to interpret genotypes (can take a few minutes)\n")
-        test_vs_rules <- safe_execute(test_rules_amrfp(amrrules$geno_table %>% filter(drug_class %in% amrrules$drug_class_list), rules$rules, amrrules$species))
+        test_vs_rules <- safe_execute(test_rules_amrfp(amrrules$geno_table %>% filter(Name %in% amrrules$pheno_table_micdisk$id), rules$rules, amrrules$species))
         safe_execute(readr::write_tsv(test_vs_rules, file=paste0(outpath_pred,"_predictionsFromRules.tsv")))
 
         if (!is.null(amrrules$pheno_table)) {
-          cat (" Comparing phenotypes predicted from rules vs observed phenotypes\n")
+          cat (" Comparing phenotypes predicted from rules vs observed phenotypes (for samples with MIC/disk assay data)\n")
           compare_pred <- safe_execute(compare_interpretations(pred=test_vs_rules,
                                                                obs=amrrules$pheno_table,
                                                                antibiotic=amrrules$antibiotic,
