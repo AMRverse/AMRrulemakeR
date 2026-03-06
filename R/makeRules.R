@@ -406,7 +406,10 @@ makerules <- function(amrrules, minObs=3, low_threshold=20, core_threshold=0.9,
     rename(phenotype_note=note)
 
   ## remove unnecessary combination rules
-  combinations <- data %>% filter(marker_count>1) %>% arrange(marker_count) %>% pull(marker)
+  combinations <- data %>%
+                    filter(marker_count>1) %>%
+                    arrange(marker_count) %>%
+                    pull(marker)
 
   cat(" Defining rules for marker combinations\n")
   for (combo in combinations) {
@@ -448,7 +451,7 @@ makerules <- function(amrrules, minObs=3, low_threshold=20, core_threshold=0.9,
     }
   }
 
-  ## add rule IDs, update marker combinations to be expressed combinations of component marker ruleIDs
+  ## add rule IDs, update marker combinations to be expressed as combinations of component marker ruleIDs
   data <- data %>% arrange(marker_count) %>%
     mutate(ruleID = paste0(rule_prefix,ruleID_start + row_number()), .before=marker)
 
@@ -589,8 +592,11 @@ makerules <- function(amrrules, minObs=3, low_threshold=20, core_threshold=0.9,
     mutate(txid=ncbi_taxid) %>%
     mutate(date_stamp=format(Sys.time(), "%Y-%m-%d %H:%M:%S")) %>%
     mutate(`evidence code`=if_else(!is.na(`clinical category`), "ECO:0001103 natural variation mutant evidence", "")) %>%
-    mutate(`gene context` = "CHECK") %>%
     mutate(`drug class` = "-") %>%
+    mutate(`variation type`= if_else(grepl("&", gene), "Combination", `variation type`)) %>%
+    mutate(`gene context` = case_when(mutation != "-" ~ "core",
+                                      `variation type`=="Combination" ~ "-",
+                                      TRUE ~ "CHECK")) %>%
     select(ruleID, txid, organism, gene, node, mutation, `variation type`, `gene context`,
            drug, `drug class`, phenotype, `clinical category`,
            breakpoint, `breakpoint standard`, `breakpoint condition`,
