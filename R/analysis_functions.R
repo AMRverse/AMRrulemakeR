@@ -453,6 +453,8 @@ amrrules_save <- function(amrrules, width=9, height=9, dir_path, outdir_name=NUL
               ppv_bysource <- safe_execute(predictive_value_by_var(true_vs_predict=compare_pred$true_vs_predict, sir_col=amrrules$sir_col, ecoff_col=amrrules$ecoff_col, var="source_label"))
           }
 
+          safe_execute(readr::write_tsv(compare_pred$metrics_SIR$metrics, file=paste0(outpath_pred,"_SIRmetrics.tsv")))
+          safe_execute(readr::write_tsv(compare_pred$metrics_NWT$metrics, file=paste0(outpath_pred,"_NWTmetrics.tsv")))
           safe_execute(readr::write_tsv(compare_pred$pred_ppv$table_sir, file=paste0(outpath_pred,"_SIRpredictions.tsv")))
           safe_execute(readr::write_tsv(compare_pred$pred_ppv$table_ecoff, file=paste0(outpath_pred,"_NWTpredictions.tsv")))
           if (!is.null(compare_pred$pred_ppv$plot_sir)) {safe_execute(ggsave(compare_pred$pred_ppv$plot_sir, filename=paste0(outpath_pred,"_SIRpredictions.pdf"), width=width, height=height/2))}

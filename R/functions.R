@@ -580,6 +580,13 @@ compare_interpretations <- function(pred, obs, antibiotic, sir_col="pheno_eucast
 
   true_vs_predict <- left_join(pred, obs, join_by("Name"=="id"))
 
+  metrics_SIR <- safe_execute(rules_concordance(true_vs_predict, "pheno_eucast", "category"))
+  safe_execute(metrics_SIR$metrics <- metrics_SIR$metrics %>% mutate(outcome="R", antibiotic=ab_name(as.ab(antibiotic))))
+
+  metrics_NWT <- safe_execute(rules_concordance(true_vs_predict, "ecoff", "phenotype"))
+  safe_execute(metrics_NWT$metrics <- metrics_NWT$metrics %>% mutate(outcome="NWT", antibiotic=ab_name(as.ab(antibiotic))))
+
+  # calculate ppv and make plots
   ppv <- safe_execute(predictive_value(true_vs_predict, sir_col=sir_col, ecoff_col=ecoff_col))
 
   true_vs_predict <- true_vs_predict %>%
@@ -588,8 +595,10 @@ compare_interpretations <- function(pred, obs, antibiotic, sir_col="pheno_eucast
     true_vs_predict <- true_vs_predict %>% mutate(type=paste(type, !!sym(var)))
   }
 
+  # calculate ppv per method and make plots
   ppv_bymethod <- safe_execute(predictive_value_by_var(true_vs_predict, sir_col=sir_col, ecoff_col=ecoff_col, var="type"))
 
+  # plot assay distributions coloured by prediction
   dist_mic_bypred <- safe_execute(dist_by_pred(true_vs_predict %>% filter(!is.na(mic)), antibiotic, assay="mic", var=NULL,
                                                breakpoint_ecoff=mic_ecoff, breakpoint_S=mic_S, breakpoint_R = mic_R))
   dist_mic_bypred_bymethod <- safe_execute(dist_by_pred(true_vs_predict %>% filter(!is.na(mic)), antibiotic, assay="mic", var=var,
@@ -601,6 +610,8 @@ compare_interpretations <- function(pred, obs, antibiotic, sir_col="pheno_eucast
                                                 breakpoint_ecoff=disk_ecoff, breakpoint_S=disk_S, breakpoint_R = disk_R))
 
   return(list(true_vs_predict=true_vs_predict,
+         metrics_SIR=metrics_SIR,
+         metrics_NWT=metrics_NWT,
          pred_ppv=ppv,
          pred_ppv_bymethod=ppv_bymethod,
          dist_mic_bypred=dist_mic_bypred,

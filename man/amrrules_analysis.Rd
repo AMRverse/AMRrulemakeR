@@ -44,7 +44,7 @@ amrrules_analysis(
 
 \item{sir_col}{The name of the trusted S/I/R classification column to use, e.g. inferred from available MIC and/or disk data (default: \code{"pheno_eucast"}).}
 
-\item{ecoff_col}{The name of the column providing S/R calls indicating the classification of each sample and drug against the ECOFF (default: \code{"ecoff"}).}
+\item{ecoff_col}{The name of the column providing WT/NWT calls indicating the classification of each sample and drug against the ECOFF (default: \code{"ecoff"}).}
 
 \item{sir_provided_col}{The name of the extended S/I/R classification column, e.g. including calls provided as S/I/R but without assay measures to interpret directly (default: \code{"pheno_provided"}).}
 

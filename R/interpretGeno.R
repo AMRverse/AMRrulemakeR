@@ -62,31 +62,42 @@ test_rules_amrfp <- function(geno_table, rules, species) {
   return(calls)
 }
 
-
 getCall <- function(label_list, rules) {
-  # get individual rule IDs
+  # Get individual rule IDs
   label_list <- unlist(str_split(label_list, ","))
   matching_rules <- rules %>% filter(marker %in% label_list)
 
-  # if there's more than one, check for combination rules
-  if (length(matching_rules)>1) {
+  # If there's more than one, check for combination rules
+  if (nrow(matching_rules) > 1) {
     ruleIDs <- matching_rules %>% pull(ruleID)
-    matching_rules <- rules %>% filter(grepl("&", gene)) %>%
-      rowwise() %>%
-      filter(compare2sets(gene, ruleIDs)) %>%
-      bind_rows(matching_rules)
+
+    # Vectorized comparison instead of rowwise
+    combo_rules <- rules %>%
+      filter(grepl("&", gene)) %>%
+      filter(sapply(gene, function(g) compare2sets(g, ruleIDs))) # Use sapply for vectorization
+
+    matching_rules <- bind_rows(combo_rules, matching_rules)
   }
 
-  if (nrow(matching_rules)>0) {
+  # Group and summarize results if there are matching rules
+  if (nrow(matching_rules) > 0) {
     call <- matching_rules %>%
       group_by(drug) %>%
-      summarise(phenotype=max(phenotype, na.rm=T), category=max(`clinical category`, na.rm=T),
-              rules=paste(ruleID, collapse=",")) %>%
+      summarise(
+        phenotype = max(phenotype, na.rm = TRUE),
+        category = max(`clinical category`, na.rm = TRUE),
+        rules = paste(ruleID, collapse = ","),
+        .groups = 'drop' # Avoids keeping the grouping structure
+      ) %>%
       select(drug, phenotype, category, rules)
+  } else {
+    call <- tibble(
+      drug = NA_character_,
+      phenotype = NA_character_,
+      category = NA_character_,
+      rules = NA_character_
+    )
   }
-  else {call <- tibble(drug = NA_character_,
-                       phenotype = NA_character_,
-                       category = NA_character_,
-                       rules = NA_character_)}
+
   return(call)
 }

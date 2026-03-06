@@ -13,8 +13,10 @@ Imports:
     AMRgen,
     dplyr,
   	ggplot2,
+  	tibble,
   	tidyr,
-  	magrittr
+  	magrittr,
+  	yardstick
 Depends: 
     R (>= 3.5),
     rlang
