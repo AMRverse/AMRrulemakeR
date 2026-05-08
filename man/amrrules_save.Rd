@@ -37,9 +37,9 @@ amrrules_save(
 
 \item{dir_path}{The path to the directory where the output will be saved.}
 
-\item{outdir_name}{The name of the subdirectory within \code{dir_path} to save the results in (default: the antibiotic name).}
+\item{outdir_name}{The name of the subdirectory within \code{dir_path} to save the results in (default: the antibiotic name stored in \code{amrrules$antibiotic}).}
 
-\item{file_prefix}{The prefix for filenames of output files (default: the antibiotic name).}
+\item{file_prefix}{The prefix for filenames of output files (default: the antibiotic name stored in \code{amrrules$antibiotic}).}
 
 \item{minObs}{The minimum number of observations required to include a rule (default: 3).}
 
@@ -94,7 +94,7 @@ If no output directory name is provided, the default is the antibiotic name.
 }
 \examples{
 \dontrun{
-amrrules_analysis(geno_table, pheno_table, antibiotic = "Ciprofloxacin",
+amrrules_analysis(geno_table, pheno_table, pheno_drug = "Ciprofloxacin",
                   drug_class_list = c("Quinolones"), species = "E. coli")
 amrrules_save(amrrules, dir_path = "output/", outdir_name = "Ciprofloxacin")
 }

@@ -7,20 +7,20 @@
 amrrules_analysis(
   geno_table,
   pheno_table,
-  antibiotic,
+  pheno_drug,
   drug_class_list,
   species,
   sir_col = "pheno_eucast",
   ecoff_col = "ecoff",
   sir_provided_col = "pheno_provided",
-  geno_sample_col = "Name",
+  geno_sample_col = "id",
   pheno_sample_col = "id",
   marker_col = "marker.label",
   minPPV = 1,
   mafLogReg = 5,
   mafUpset = 1,
   info = NULL,
-  excludeRanges = TRUE,
+  excludeRanges = "none",
   bp_site = NULL,
   mic_S = NULL,
   mic_R = NULL,
@@ -28,15 +28,17 @@ amrrules_analysis(
   disk_R = NULL,
   use_mic = TRUE,
   use_disk = TRUE,
-  call_manual = TRUE
+  call_manual = TRUE,
+  gene_symbol_col = "Gene symbol",
+  element_type_col = "Element type"
 )
 }
 \arguments{
 \item{geno_table}{A data frame of genotypic data with a \code{drug_class} column, sample IDs (specified using \code{geno_sample_col}), and AMR determinants (\code{marker}). Can be generated from AMRfinderplus output using \code{AMRgen::import_amrfp}.}
 
-\item{pheno_table}{A data frame of phenotypic data, including columns for sample IDs (specified using \code{pheno_sample_col}), antibiotic (\code{drug_agent}), MIC (\code{mic}), disk diffusion (\code{disk}), and S/I/R classification (specified using \code{sir_col}).}
+\item{pheno_table}{A data frame of phenotypic data, including columns for sample IDs (specified using \code{pheno_sample_col}), antibiotic (\code{drug}), MIC (\code{mic}), disk diffusion (\code{disk}), and S/I/R classification (specified using \code{sir_col}).}
 
-\item{antibiotic}{A string specifying the antibiotic to analyze (e.g., \code{"Ciprofloxacin"}).}
+\item{pheno_drug}{A string specifying the drug whose phenotype data to analyze (e.g., \code{"Ciprofloxacin"}).}
 
 \item{drug_class_list}{A character vector of drug classes whose attributed markers should be included in the analysis.}
 
@@ -48,7 +50,7 @@ amrrules_analysis(
 
 \item{sir_provided_col}{The name of the extended S/I/R classification column, e.g. including calls provided as S/I/R but without assay measures to interpret directly (default: \code{"pheno_provided"}).}
 
-\item{geno_sample_col}{The column in \code{geno_table} with sample IDs (default: \code{"Name"}).}
+\item{geno_sample_col}{The column in \code{geno_table} with sample IDs (default: \code{"id"}).}
 
 \item{pheno_sample_col}{The column in \code{pheno_table} with sample IDs (default: \code{"id"}).}
 
@@ -61,6 +63,10 @@ amrrules_analysis(
 \item{mafUpset}{Minor allele frequency threshold for upset plot inclusion (default: 1).}
 
 \item{info}{Data frame indicating information about each sample, so we can summarise the source/s of data supporting each rule. First column should be sample id, matching that in the \code{pheno_table} object.}
+
+\item{excludeRanges}{Change how MICs expressed as ranges are treated when running solo PPV analysis. Default is "none". Set to "all" to ignore MICs expressed as ranges for all solo PPV analyses. Set to "NWT" to ignore MICs expressed as ranges only for the analysis of NWT as outcome.}
+
+\item{bp_site}{Site of infection, used if multiple breakpoint values are available for different body sites.}
 
 \item{mic_S}{The MIC breakpoint to define S (Optional, by default breakpoints are extracted using the AMR package, however if none are available or user wants to use a different one e.g. an ECOFF then it can be specified here).}
 
@@ -75,6 +81,10 @@ amrrules_analysis(
 \item{use_disk}{Logical indicating whether to use disk diffusion data for rule generation. Default is \code{TRUE}.}
 
 \item{call_manual}{Logical indicating whether to interpret assay data manually against the provided S/R breakpoints, if they are provided. Otherwise we assume the input pheno_table object has interpreted phenotypes already (in column 'sir_col').}
+
+\item{gene_symbol_col}{String indicating the name of the column in the input genotype table (i.e. \code{geno_table}) containing the 'Gene symbol' field from raw AMRFinderPlus output. Default is \verb{"Gene symbol}. If using processed genotypes downloaded from EBI using \code{AMRgen::download_ebi()} this will normally be "gene_symbol", if downloading from EBI via their website it may be "genotype-gene_symbol".}
+
+\item{element_type_col}{String indicating the name of the column in the input genotype table (i.e. \code{geno_table}) containing the 'Element type' field from raw AMRFinderPlus output. Default is \verb{"Element type}. If using processed genotypes downloaded from EBI using \code{AMRgen::download_ebi()} this will normally be "element_type", if downloading from EBI via their website it may be "genotype-element_type".}
 }
 \value{
 A list containing:
@@ -99,10 +109,10 @@ A list containing:
 \item{combination_summary_values}{Summary of genotype combinations from both MIC and disk}
 \item{afp_hits}{List of AMR markers detected}
 \item{species}{The species used in the analysis}
-\item{antibiotic}{The antibiotic used in the analysis}
+\item{pheno_drug}{The drug whose phenotypes were used in the analysis}
 }
 \description{
-This function runs a full AMR rule analysis pipeline, using the AMR and AMRgen packages, for a specified antibiotic and organism.
+This function runs a full AMR rule analysis pipeline, using the AMR and AMRgen packages, for a specified drug and organism.
 It includes EUCAST reference distribution plotting, phenotype/genotype overlap, solo PPV calculations, logistic regression,
 upset plots for disk and MIC data, and summary statistics for AMR markers.
 }
@@ -116,7 +126,7 @@ All steps are wrapped in \code{safe_execute()} to allow the pipeline to run part
 }
 \examples{
 \dontrun{
-amrrules_analysis(geno_table, pheno_table, antibiotic = "Ciprofloxacin",
+amrrules_analysis(geno_table, pheno_table, pheno_drug = "Ciprofloxacin",
                   drug_class_list = c("Quinolones"), species = "E. coli")
 }
 

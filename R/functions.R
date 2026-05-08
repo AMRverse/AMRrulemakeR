@@ -21,7 +21,8 @@
 #'
 #' @examples
 #' \dontrun{
-#' summarise_data(geno_table, pheno_table, antibiotic = "Ciprofloxacin", drug_class_list=c("Quinolones"), species="E. coli")
+#' summarise_data(geno_table, pheno_table, antibiotic = "Ciprofloxacin",
+#'   drug_class_list=c("Quinolones"), species="E. coli")
 #' }
 #'
 #' @export
@@ -76,28 +77,6 @@ summarise_data <- function(geno_table, pheno_table, antibiotic, drug_class_list,
 
 
 
-# Helper functions
-safe_execute <- function(expr) {
-  tryCatch({
-    expr
-  }, error = function(e) {
-    message("Error in executing command: ", e$message)
-    return(NULL)
-  })
-}
-
-na0 <- function(x) {
-  ifelse(is.na(x), 0, x)
-}
-
-add_missing_cols <- function(df, cols) {
-  for (col in cols) {
-    if (!col %in% names(df)) {
-      df <- df %>% mutate(!!sym(col) := 0)
-    }
-  }
-  df
-}
 
 compareSets <- function(v, strings, split_delim) {
   matches <- NULL
@@ -523,6 +502,7 @@ breakpoints <- function(breakpoint_mic, breakpoint_disk, bp_source_list, mic.sou
 
 # check MICs expressed as ranges, how these are interpreted and if it impacts PPV estimates
 # plot MIC distributions for isolates with no resistance markers, stratified by platform/method to help check the impact of range values in different methods
+#' @importFrom patchwork plot_layout plot_annotation
 checkMICranges <- function(geno_table, pheno_table, antibiotic, drug_class_list, sir_col="pheno_eucast", ecoff_col="ecoff", minPPV=1, marker_col="marker.label", icat=TRUE, species, bp_site=NULL, excludeRanges="NWT") {
 
   pheno_table_micdisk <- pheno_table %>% filter(!is.na(mic) | !is.na(disk))

@@ -26,7 +26,6 @@
 #' @param regression Logical indicating whether to consider logistic regression data (only used to define wildtype S for an individual marker, where the p-value exceeds 0.05 and odds ratio crosses 0, and there is no solo-marker data available). Default is `TRUE`.
 #' @param expected_R Logical indicating whether to manually enforce whether or not this drug is an expected 'R' for this species. If NULL, we will check if this species & drug is included in `AMR::intrinsic_resistant`.
 #' @param expected_I Logical indicating whether to manually enforce whether or not this drug should be reported as 'I' for this species. If NULL, we will check the S breakpoints and assume if this is set to 0.001 (MIC), or 50 (disk) this drug should always be reported as I not S.
-#' @param gene_symbol_col String indicating the name of the column in the input genotype table (i.e. `amrrules$geno_table`) containing the 'Gene symbol' field from raw AMRFinderPlus output. Default is `"Gene symbol`. If using processed genotypes downloaded from EBI using [download_ebi()] this will normally be "gene_symbol", if downloading from EBI via their website it may be "genotype-gene_symbol".
 #'
 #' @return A list containing 2 data frames:
 #'   - `rules`: The draft rules in AMRrules format (spec v0.6), with some additional quantitative data fields to support review.
@@ -498,9 +497,9 @@ makerules <- function(amrrules, minObs=3, low_threshold=20, core_threshold=0.9,
       distinct()
   } else { message(paste0("Could not find gene symbol column (provided as amrrules$gene_symbol_col): ",amrrules$gene_symbol_col," in input: amrrules$afp_hits"))}
 
-  # clean up fields as per AMRrules spec v0.6
+  # clean up fields as per AMRrules spec v1.0
 
-  message(" Cleaning up fields to match AMRrules spec v0.6")
+  message(" Cleaning up fields to match AMRrules spec v1.0")
 
   data <- data %>% left_join(gene_info, by="marker") %>%
     mutate(gene=if_else(marker_count>1, gene, node)) %>% # pull gene from ruleID combination for combo rules, otherwise node name from gene_info

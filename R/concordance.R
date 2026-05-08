@@ -22,7 +22,7 @@
 #' and very major error, VME) per ISO 20776-2 (and see
 #' [FDA definitions](https://www.fda.gov/medical-devices/guidance-documents-medical-devices-and-radiation-emitting-products/antimicrobial-susceptibility-test-ast-systems-class-ii-special-controls-guidance-industry-and-fda)).
 #'
-#' @param data A data frame containing observed and predicted phenotypes.
+#' @param df A data frame containing observed and predicted phenotypes.
 #' @param pheno_col String indicating the name of the column containing the true phenotypes (default `"pheno_eucast"`).
 #' @param pred_col String indicating the name of the column containing the predicted phenotypes (default `"category"`).
 #'

@@ -1,6 +1,6 @@
 #' AMR Genotype-Phenotype Analysis to support defining AMRrules
 #'
-#' This function runs a full AMR rule analysis pipeline, using the AMR and AMRgen packages, for a specified antibiotic and organism.
+#' This function runs a full AMR rule analysis pipeline, using the AMR and AMRgen packages, for a specified drug and organism.
 #' It includes EUCAST reference distribution plotting, phenotype/genotype overlap, solo PPV calculations, logistic regression,
 #' upset plots for disk and MIC data, and summary statistics for AMR markers.
 #'
@@ -8,7 +8,7 @@
 #'
 #' @param geno_table A data frame of genotypic data with a `drug_class` column, sample IDs (specified using `geno_sample_col`), and AMR determinants (`marker`). Can be generated from AMRfinderplus output using `AMRgen::import_amrfp`.
 #' @param pheno_table A data frame of phenotypic data, including columns for sample IDs (specified using `pheno_sample_col`), antibiotic (`drug`), MIC (`mic`), disk diffusion (`disk`), and S/I/R classification (specified using `sir_col`).
-#' @param antibiotic A string specifying the antibiotic to analyze (e.g., `"Ciprofloxacin"`).
+#' @param pheno_drug A string specifying the drug whose phenotype data to analyze (e.g., `"Ciprofloxacin"`).
 #' @param drug_class_list A character vector of drug classes whose attributed markers should be included in the analysis.
 #' @param species A string indicating the species name used for breakpoint and reference distribution lookups (e.g., `"E. coli"`).
 #' @param sir_col The name of the trusted S/I/R classification column to use, e.g. inferred from available MIC and/or disk data (default: `"pheno_eucast"`).
@@ -27,9 +27,11 @@
 #' @param use_disk Logical indicating whether to use disk diffusion data for rule generation. Default is `TRUE`.
 #' @param disk_S The disk breakpoint to define S (Optional, by default breakpoints are extracted using the AMR package, however if none are available or user wants to use a different one e.g. an ECOFF then it can be specified here).
 #' @param disk_R The disk breakpoint to define R (Optional, by default breakpoints are extracted using the AMR package, however if none are available or user wants to use a different one e.g. an ECOFF then it can be specified here).
+#' @param bp_site Site of infection, used if multiple breakpoint values are available for different body sites.
 #' @param call_manual Logical indicating whether to interpret assay data manually against the provided S/R breakpoints, if they are provided. Otherwise we assume the input pheno_table object has interpreted phenotypes already (in column 'sir_col').
-#' @param gene_symbol_col String indicating the name of the column in the input genotype table (i.e. `geno_table`) containing the 'Gene symbol' field from raw AMRFinderPlus output. Default is `"Gene symbol`. If using processed genotypes downloaded from EBI using [download_ebi()] this will normally be "gene_symbol", if downloading from EBI via their website it may be "genotype-gene_symbol".
-#' @param element_type_col String indicating the name of the column in the input genotype table (i.e. `geno_table`) containing the 'Element type' field from raw AMRFinderPlus output. Default is `"Element type`. If using processed genotypes downloaded from EBI using [download_ebi()] this will normally be "element_type", if downloading from EBI via their website it may be "genotype-element_type".
+#' @param gene_symbol_col String indicating the name of the column in the input genotype table (i.e. `geno_table`) containing the 'Gene symbol' field from raw AMRFinderPlus output. Default is `"Gene symbol`. If using processed genotypes downloaded from EBI using `AMRgen::download_ebi()` this will normally be "gene_symbol", if downloading from EBI via their website it may be "genotype-gene_symbol".
+#' @param element_type_col String indicating the name of the column in the input genotype table (i.e. `geno_table`) containing the 'Element type' field from raw AMRFinderPlus output. Default is `"Element type`. If using processed genotypes downloaded from EBI using `AMRgen::download_ebi()` this will normally be "element_type", if downloading from EBI via their website it may be "genotype-element_type".
+#' @param excludeRanges Change how MICs expressed as ranges are treated when running solo PPV analysis. Default is "none". Set to "all" to ignore MICs expressed as ranges for all solo PPV analyses. Set to "NWT" to ignore MICs expressed as ranges only for the analysis of NWT as outcome.
 #'
 #' @return A list containing:
 #' \item{reference_mic_plot}{EUCAST reference MIC distribution plot}
@@ -53,7 +55,7 @@
 #' \item{combination_summary_values}{Summary of genotype combinations from both MIC and disk}
 #' \item{afp_hits}{List of AMR markers detected}
 #' \item{species}{The species used in the analysis}
-#' \item{antibiotic}{The antibiotic used in the analysis}
+#' \item{pheno_drug}{The drug whose phenotypes were used in the analysis}
 #'
 #' @details
 #' This function is designed to assist in AMR rule derivation by integrating multiple evidence streams: EUCAST distributions,
@@ -61,51 +63,52 @@
 #'
 #' All steps are wrapped in `safe_execute()` to allow the pipeline to run partially in case of errors.
 #'
+#' @importFrom AMRgen get_eucast_mic_distribution get_eucast_disk_distribution assay_by_var amr_logistic amr_upset solo_ppv compare_geno_pheno_id
 #' @examples
 #' \dontrun{
-#' amrrules_analysis(geno_table, pheno_table, antibiotic = "Ciprofloxacin",
+#' amrrules_analysis(geno_table, pheno_table, pheno_drug = "Ciprofloxacin",
 #'                   drug_class_list = c("Quinolones"), species = "E. coli")
 #' }
 #'
 #' @export
-amrrules_analysis <- function(geno_table, pheno_table, antibiotic, drug_class_list, species,
+amrrules_analysis <- function(geno_table, pheno_table, pheno_drug, drug_class_list, species,
                               sir_col="pheno_eucast", ecoff_col="ecoff", sir_provided_col="pheno_provided",
                               geno_sample_col="id", pheno_sample_col="id", marker_col="marker.label",
-                              minPPV=1, mafLogReg=5, mafUpset=1, info=NULL, excludeRanges=TRUE, bp_site=NULL,
+                              minPPV=1, mafLogReg=5, mafUpset=1, info=NULL, excludeRanges="none", bp_site=NULL,
                               mic_S=NULL, mic_R=NULL, disk_S=NULL, disk_R=NULL,
                               use_mic=TRUE, use_disk=TRUE, call_manual=TRUE,
                               gene_symbol_col="Gene symbol", element_type_col="Element type") {
 
-  message(paste("Starting analysis for", ab_name(as.ab(antibiotic))))
+  message(paste("Starting analysis for", ab_name(as.ab(pheno_drug))))
 
   # plot EUCAST reference distributions
-  reference_mic <- safe_execute(AMRgen::get_eucast_mic_distribution(antibiotic, species))
+  reference_mic <- safe_execute(AMRgen::get_eucast_mic_distribution(pheno_drug, species))
   reference_mic <- safe_execute(rep(reference_mic$mic, reference_mic$count))
-  reference_mic_plot <- safe_execute(ggplot2::autoplot(reference_mic, ab = antibiotic, mo = species, title = "EUCAST reference MIC distribution"))
+  reference_mic_plot <- safe_execute(ggplot2::autoplot(reference_mic, ab = pheno_drug, mo = species, title = "EUCAST reference MIC distribution"))
 
-  reference_disk <- safe_execute(AMRgen::get_eucast_disk_distribution(antibiotic, species))
+  reference_disk <- safe_execute(AMRgen::get_eucast_disk_distribution(pheno_drug, species))
   reference_disk <- safe_execute(rep(reference_disk$disk_diffusion, reference_disk$count))
-  reference_disk_plot <- safe_execute(ggplot2::autoplot(reference_disk, ab = antibiotic, mo = species, title = "EUCAST reference disk zone distribtion"))
+  reference_disk_plot <- safe_execute(ggplot2::autoplot(reference_disk, ab = pheno_drug, mo = species, title = "EUCAST reference disk zone distribtion"))
 
-  input_mic_sir_plot <- safe_execute(AMRgen::assay_by_var(pheno_table, antibiotic, measure="mic", facet_by=NULL,
+  input_mic_sir_plot <- safe_execute(AMRgen::assay_by_var(pheno_table, pheno_drug, measure="mic", facet_by=NULL,
                                                           species=species, bp_site=bp_site, colour_by=sir_col))
-  input_mic_sir_plot_bymethod <- safe_execute(AMRgen::assay_by_var(pheno_table, antibiotic, measure="mic", facet_by="method",
+  input_mic_sir_plot_bymethod <- safe_execute(AMRgen::assay_by_var(pheno_table, pheno_drug, measure="mic", facet_by="method",
                                   species=species, bp_site=bp_site, colour_by=sir_col))
-  input_mic_nwt_plot_bymethod <- safe_execute(AMRgen::assay_by_var(pheno_table, antibiotic, measure="mic", facet_by="method",
+  input_mic_nwt_plot_bymethod <- safe_execute(AMRgen::assay_by_var(pheno_table, pheno_drug, measure="mic", facet_by="method",
                                                           species=species, bp_site=bp_site, colour_by=ecoff_col))
 
-  input_disk_sir_plot <- safe_execute(AMRgen::assay_by_var(pheno_table, antibiotic, measure="disk", facet_by=NULL,
+  input_disk_sir_plot <- safe_execute(AMRgen::assay_by_var(pheno_table, pheno_drug, measure="disk", facet_by=NULL,
                                                            species=species, bp_site=bp_site, colour_by=sir_col))
-  input_disk_sir_plot_bymethod <- safe_execute(AMRgen::assay_by_var(pheno_table, antibiotic, measure="disk", facet_by="method",
+  input_disk_sir_plot_bymethod <- safe_execute(AMRgen::assay_by_var(pheno_table, pheno_drug, measure="disk", facet_by="method",
                                                           species=species, bp_site=bp_site, colour_by=sir_col))
-  input_disk_nwt_plot_bymethod <- safe_execute(AMRgen::assay_by_var(pheno_table, antibiotic, measure="disk", facet_by="method",
+  input_disk_nwt_plot_bymethod <- safe_execute(AMRgen::assay_by_var(pheno_table, pheno_drug, measure="disk", facet_by="method",
                                                           species=species, bp_site=bp_site, colour_by=ecoff_col))
 
   ### TO DO: improve this
-  #summary <- safe_execute(summarise_data(geno_table, pheno_table, antibiotic=antibiotic, drug_class_list=drug_class_list, geno_sample_col=geno_sample_col, pheno_sample_col=pheno_sample_col, species=species))
+  #summary <- safe_execute(summarise_data(geno_table, pheno_table, antibiotic=pheno_drug, drug_class_list=drug_class_list, geno_sample_col=geno_sample_col, pheno_sample_col=pheno_sample_col, species=species))
 
   message("Running solo PPV analysis on samples with MIC or disk measures")
-  pheno_table_micdisk <- pheno_table %>% filter(!is.na(mic) | !is.na(disk)) %>% filter(drug==as.ab(antibiotic))
+  pheno_table_micdisk <- pheno_table %>% filter(!is.na(mic) | !is.na(disk)) %>% filter(drug==as.ab(pheno_drug))
 
   if (call_manual & !is.null(mic_S) & !is.null(mic_R) & sum(!is.na(pheno_table_micdisk$mic))>0) {
     message(" Manually calling SIR using provided MIC breakpoints")
@@ -133,14 +136,14 @@ amrrules_analysis <- function(geno_table, pheno_table, antibiotic, drug_class_li
     pheno_table_micdisk <- bind_rows(pheno_table_micdisk_mic, pheno_table_micdisk_disk)
   }
 
-  #soloPPV_micdisk <- safe_execute(AMRgen::solo_ppv(geno_table=geno_table, pheno_table=pheno_table_micdisk, pheno_drug=antibiotic, geno_class=drug_class_list, sir_col=sir_col, ecoff_col=ecoff_col, min=minPPV, marker_col=marker_col, icat=TRUE))
-  check_solo <- checkMICranges(geno_table, pheno_table_micdisk, antibiotic=antibiotic, drug_class_list=drug_class_list,
+  #soloPPV_micdisk <- safe_execute(AMRgen::solo_ppv(geno_table=geno_table, pheno_table=pheno_table_micdisk, pheno_drug=pheno_drug, geno_class=drug_class_list, sir_col=sir_col, ecoff_col=ecoff_col, min=minPPV, marker_col=marker_col, icat=TRUE))
+  check_solo <- checkMICranges(geno_table, pheno_table_micdisk, antibiotic=pheno_drug, drug_class_list=drug_class_list,
                                species=species, bp_site=bp_site, excludeRanges="NWT", marker_col=marker_col,
-                               sir_col=sir_col, ecoff_col=ecoff_col, min=minPPV)
+                               sir_col=sir_col, ecoff_col=ecoff_col, minPPV=minPPV)
   soloPPV_micdisk <- check_solo$soloPPV_micdisk
 
   message("Running logistic regression on samples with MIC or disk measures")
-  logistic_micdisk <- safe_execute(AMRgen::amr_logistic(geno_table=geno_table, pheno_table=pheno_table_micdisk, pheno_drug=antibiotic, geno_class=drug_class_list, sir_col=sir_col, ecoff_col=ecoff_col, maf=mafLogReg, geno_sample_col=geno_sample_col, pheno_sample_col=pheno_sample_col, marker_col=marker_col))
+  logistic_micdisk <- safe_execute(AMRgen::amr_logistic(geno_table=geno_table, pheno_table=pheno_table_micdisk, pheno_drug=pheno_drug, geno_class=drug_class_list, sir_col=sir_col, ecoff_col=ecoff_col, maf=mafLogReg, geno_sample_col=geno_sample_col, pheno_sample_col=pheno_sample_col, marker_col=marker_col))
 
   message("Combining PPV and regression stats for samples with MIC or disk measures")
   # combined PPV/logistic plot for samples with MIC or disk measures
@@ -170,10 +173,10 @@ amrrules_analysis <- function(geno_table, pheno_table, antibiotic, drug_class_li
     bind_rows(pheno_table_micdisk %>% rename(pheno=!!sir_col) %>% rename(ecoff=!!ecoff_col))
 
     message("Running solo PPV analysis on all samples, including those with SIR calls only")
-    soloPPV_sir <- safe_execute(AMRgen::solo_ppv(geno_table=geno_table, pheno_table=pheno_table_sir, pheno_drug=antibiotic, geno_class=drug_class_list, sir_col="pheno", ecoff_col="ecoff", min=minPPV, marker_col=marker_col, icat=TRUE))
+    soloPPV_sir <- safe_execute(AMRgen::solo_ppv(geno_table=geno_table, pheno_table=pheno_table_sir, pheno_drug=pheno_drug, geno_class=drug_class_list, sir_col="pheno", ecoff_col="ecoff", min=minPPV, marker_col=marker_col, icat=TRUE))
 
     message("Running logistic regression on all samples, including those with SIR calls only")
-    logistic_sir <- safe_execute(AMRgen::amr_logistic(geno_table=geno_table, pheno_table=pheno_table_sir, pheno_drug=antibiotic, geno_class=drug_class_list, sir_col="pheno", ecoff_col="ecoff", maf=mafLogReg, geno_sample_col=geno_sample_col, pheno_sample_col=pheno_sample_col, marker_col=marker_col))
+    logistic_sir <- safe_execute(AMRgen::amr_logistic(geno_table=geno_table, pheno_table=pheno_table_sir, pheno_drug=pheno_drug, geno_class=drug_class_list, sir_col="pheno", ecoff_col="ecoff", maf=mafLogReg, geno_sample_col=geno_sample_col, pheno_sample_col=pheno_sample_col, marker_col=marker_col))
 
     message("Combining PPV and regression stats for all samples")
     # combined PPV/logistic plot for samples with MIC or disk measures
@@ -187,7 +190,7 @@ amrrules_analysis <- function(geno_table, pheno_table, antibiotic, drug_class_li
 
   # return AMRFP info for all unique markers in this class with any pheno data
   overlap <- AMRgen::compare_geno_pheno_id(geno_table %>% filter(drug_class %in% drug_class_list),
-                                           pheno_table %>% filter(drug==as.ab(antibiotic)),
+                                           pheno_table %>% filter(drug==as.ab(pheno_drug)),
                                            geno_sample_col = geno_sample_col,
                                            pheno_sample_col = pheno_sample_col, rename_id_cols = T)
 
@@ -209,7 +212,7 @@ amrrules_analysis <- function(geno_table, pheno_table, antibiotic, drug_class_li
 
   # extract info for relevant samples (for source enumeration)
   if (!is.null(info)) {
-    samples_with_pheno <- pheno_table %>% filter(drug==as.ab(antibiotic))
+    samples_with_pheno <- pheno_table %>% filter(drug==as.ab(pheno_drug))
     colnames(info)[1] <- "id"
     info <- info %>% filter(id %in% samples_with_pheno$id)
   }
@@ -252,7 +255,7 @@ amrrules_analysis <- function(geno_table, pheno_table, antibiotic, drug_class_li
               compare_solo_table=check_solo$table,
               afp_hits=afp_hits,
               species=species,
-              antibiotic=antibiotic,
+              antibiotic=pheno_drug,
               drug_class_list=drug_class_list,
               sir_col=sir_col,
               ecoff_col=ecoff_col,
@@ -276,8 +279,8 @@ amrrules_analysis <- function(geno_table, pheno_table, antibiotic, drug_class_li
 #' @param width Numeric, the width of the output plot images (default: 9).
 #' @param height Numeric, the height of the output plot images (default: 9).
 #' @param dir_path The path to the directory where the output will be saved.
-#' @param outdir_name The name of the subdirectory within \code{dir_path} to save the results in (default: the antibiotic name).
-#' @param file_prefix The prefix for filenames of output files (default: the antibiotic name).
+#' @param outdir_name The name of the subdirectory within \code{dir_path} to save the results in (default: the antibiotic name stored in `amrrules$antibiotic`).
+#' @param file_prefix The prefix for filenames of output files (default: the antibiotic name stored in `amrrules$antibiotic`).
 #' @param minObs The minimum number of observations required to include a rule (default: 3).
 #' @param low_threshold The threshold below which rules are assigned to evidence grade 'low' (default: 20).
 #' @param bp_site The breakpoint site to filter on (Optional, use the \code{\link{summarise_data}} function to check whether there are different breakpoints for different sites and choose which one to specify here. By default, if multiple breakpoints are available the most conservative will be used.).
@@ -296,6 +299,7 @@ amrrules_analysis <- function(geno_table, pheno_table, antibiotic, drug_class_li
 #'
 #' @return A data frame containing the generated AMR rules.
 #'
+#' @importFrom readr write_tsv
 #' @details
 #' This function saves the plots and data tables generated by `amrrules_analysis`, including:
 #' - Reference MIC and disk distribution plots (EUCAST)
@@ -309,7 +313,7 @@ amrrules_analysis <- function(geno_table, pheno_table, antibiotic, drug_class_li
 #'
 #' @examples
 #' \dontrun{
-#' amrrules_analysis(geno_table, pheno_table, antibiotic = "Ciprofloxacin",
+#' amrrules_analysis(geno_table, pheno_table, pheno_drug = "Ciprofloxacin",
 #'                   drug_class_list = c("Quinolones"), species = "E. coli")
 #' amrrules_save(amrrules, dir_path = "output/", outdir_name = "Ciprofloxacin")
 #' }

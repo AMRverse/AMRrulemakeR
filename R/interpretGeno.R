@@ -20,16 +20,17 @@
 #' This function assumes that rules are flat (i.e., not hierarchical). It is not compatible with manually
 #' defined rule sets that use hierarchical `nodeID`s.
 #'
-#' @seealso \code{\link{convert_mutation}}, \code{\link{getCall}}
-#'
 #' @examples
 #' \dontrun{
 #' # apply the rules to generate S/I/R and wildtype/nonwildtype calls
-#' calls <- test_rules_amrfp(geno_table = my_genotypes, rules = my_rules, species = "s__Escherichia coli")
+#' calls <- test_rules_amrfp(geno_table = my_genotypes, rules = my_rules,
+#'   species = "s__Escherichia coli")
 #'
-#' # compare these calls to the AST data phenotypes in a separate dataframe, `pheno_table` with SIR phenotypes in `pheno`
+#' # compare these calls to the AST data phenotypes in a separate dataframe,
+#' # `pheno_table` with SIR phenotypes in `pheno`
 #' calls_vs_pheno <- calls %>% left_join(pheno_table, by="id")
-#' calls_vs_pheno %>% group_by(pheno, category) %>% count() %>% filter(pheno %in% c("S", "I", "R"))
+#' calls_vs_pheno %>% group_by(pheno, category) %>% count() %>%
+#'   filter(pheno %in% c("S", "I", "R"))
 #' }
 #'
 #' @export

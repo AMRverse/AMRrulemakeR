@@ -9,15 +9,15 @@ Encoding: UTF-8
 URL: https://github.com/AMRverse/AMRrulemakeR
 BugReports: https://github.com/AMRverse/AMRrulemakeR/issues
 Imports: 
-    AMR,
-    AMRgen,
     dplyr,
   	ggplot2,
   	tibble,
-  	tidyr,
-  	magrittr,
+  	patchwork,
+  	readr,
   	yardstick
 Depends: 
+    AMR,
+    AMRgen,
     R (>= 3.5),
     rlang
 LazyData: true

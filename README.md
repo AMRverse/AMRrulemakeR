@@ -54,7 +54,7 @@ ecoli_geno_ebi
 
 # run quantitative analyses for ciprofloxacin phenotypes vs quinolone marker genotypes, using the S/I/R calls made against EUCAST breakpoints
 cip_analysis <- amrrules_analysis(geno_table=ecoli_geno_ebi, pheno_table=ecoli_pheno_ebi, 
-                                    antibiotic="Ciprofloxacin", drug_class_list=c("Quinolones"),
+                                    pheno_drug="Ciprofloxacin", drug_class_list=c("Quinolones"),
                                     sir_col="pheno_eucast", ecoff_col="ecoff",
                                     species="Escherichia coli",
                                     info=ecoli_pheno_ebi %>% select(id, source, method))
@@ -112,25 +112,25 @@ Example data frame containg data from EBI on E. coli with AST results for five d
 
 ```
 > ecoli_pheno_ebi %>% filter(!is.na(mic))
-# A tibble: 43,288 × 47
-   id        drug_agent   mic  disk pheno_eucast pheno_clsi ecoff guideline method source pheno_provided spp_pheno   
-   <chr>     <ab>       <mic> <dsk> <sir>        <sir>      <sir> <chr>     <chr>  <chr>  <sir>          <mo>        
- 1 SAMN1302… AMP           >8    NA   R            I          R   EUCAST    BD Ph… 32205…   R            B_ESCHR_COLI
- 2 SAMN1302… AMP           >8    NA   R            I          R   EUCAST    BD Ph… 32205…   R            B_ESCHR_COLI
- 3 SAMN1302… AMP           >8    NA   R            I          R   EUCAST    BD Ph… 32205…   R            B_ESCHR_COLI
- 4 SAMN1302… AMP          <=2    NA   S            S          S   EUCAST    BD Ph… 32205…   S            B_ESCHR_COLI
- 5 SAMN1302… AMP           >8    NA   R            I          R   EUCAST    BD Ph… 32205…   R            B_ESCHR_COLI
- 6 SAMN1302… AMP           >8    NA   R            I          R   EUCAST    BD Ph… 32205…   R            B_ESCHR_COLI
- 7 SAMN1302… AMP           >8    NA   R            I          R   EUCAST    BD Ph… 32205…   R            B_ESCHR_COLI
- 8 SAMN1302… AMP          <=2    NA   S            S          S   EUCAST    BD Ph… 32205…   S            B_ESCHR_COLI
- 9 SAMN1302… AMP          <=2    NA   S            S          S   EUCAST    BD Ph… 32205…   S            B_ESCHR_COLI
-10 SAMN1302… AMP           >8    NA   R            I          R   EUCAST    BD Ph… 32205…   R            B_ESCHR_COLI
+# A tibble: 66,859 × 46
+   id           drug   mic  disk pheno_provided pheno_eucast pheno_clsi ecoff guideline method         platform   source   spp_pheno   
+   <chr>        <ab> <mic> <dsk> <sir>          <sir>        <sir>      <sir> <chr>     <chr>          <chr>      <chr>    <mo>        
+ 1 SAMN13024353 AMP     >8    NA   R              R            NI        NWT  EUCAST    broth dilution BD Phoenix 32205351 B_ESCHR_COLI
+ 2 SAMN13024354 AMP     >8    NA   R              R            NI        NWT  EUCAST    broth dilution BD Phoenix 32205351 B_ESCHR_COLI
+ 3 SAMN13024355 AMP     >8    NA   R              R            NI        NWT  EUCAST    broth dilution BD Phoenix 32205351 B_ESCHR_COLI
+ 4 SAMN13024356 AMP    <=2    NA   S              S            S          WT  EUCAST    broth dilution BD Phoenix 32205351 B_ESCHR_COLI
+ 5 SAMN13024357 AMP     >8    NA   R              R            NI        NWT  EUCAST    broth dilution BD Phoenix 32205351 B_ESCHR_COLI
+ 6 SAMN13024358 AMP     >8    NA   R              R            NI        NWT  EUCAST    broth dilution BD Phoenix 32205351 B_ESCHR_COLI
+ 7 SAMN13024359 AMP     >8    NA   R              R            NI        NWT  EUCAST    broth dilution BD Phoenix 32205351 B_ESCHR_COLI
+ 8 SAMN13024360 AMP    <=2    NA   S              S            S          WT  EUCAST    broth dilution BD Phoenix 32205351 B_ESCHR_COLI
+ 9 SAMN13023842 AMP    <=2    NA   S              S            S          WT  EUCAST    broth dilution BD Phoenix 32205351 B_ESCHR_COLI
+10 SAMN13024361 AMP     >8    NA   R              R            NI        NWT  EUCAST    broth dilution BD Phoenix 32205351 B_ESCHR_COLI
 ```
 
 The key fields needed are:
 * `id` - Sample name, must match that in the corresponding genotype file.
     * If using `import_ast()`, this is taken from the biosample field.
-* `drug_agent` - Name of the antibiotic, formatted as class 'ab' (using `as.ab()`)
+* `drug` - Name of the antibiotic, formatted as class 'ab' (using `as.ab()`)
 * `mic` - MIC assay measurement (where available), formated as class 'mic' (using `as.mic()`). Note that if your input file has MIC value in one column, and sign (e.g. >, <, <=, etc) in another column (e.g. the NCBI antibiogram format), you will need to paste those two columns together first before applying `as.mic()`.
 * `disk` - Disk assay measurement (where available), formated as class 'disk' (using `as.disk()`).
 * `pheno_eucast`, `pheno_clsi` (can be any name) - A column of class 'sir', indicating the interpretation of the data in `mic` and `disk` as S/I/R, using clinical breakpoints.
@@ -149,13 +149,18 @@ The key fields needed are:
 ### Examples
 
 ```
-# download NCBI data from https://www.ncbi.nlm.nih.gov/pathogens/ast#taxgroup_name:%22E.coli%20and%20Shigella%22
+# download NCBI phenotype data from https://www.ncbi.nlm.nih.gov/pathogens/ast#taxgroup_name:%22E.coli%20and%20Shigella%22
 # import data from file
-ncbi_ast <-import_ncbi_ast("NCBI_AST_EcoliShigella.tsv.gz")
+ncbi_ast <-import_ncbi_pheno("NCBI_AST_EcoliShigella.tsv.gz")
 
-# download EBI data from https://www.ebi.ac.uk/amr/data/?view=experiments
+# download EBI phenotype data from https://www.ebi.ac.uk/amr/data/?view=experiments
 # import data from file
-ebi_ast <- import_ebi_ast("EBI_CABBAGE_EcoliShigella.csv.gz")
+ebi_ast <- import_ebi_pheno("EBI_CABBAGE_EcoliShigella.csv.gz")
+
+# download EBI phenotype data using AMRgen functions:
+ecoli_pheno_ebi <- download_ebi(genus="Escherichia", reformat=T, interpret_clsi = TRUE, interpret_eucast = TRUE, interpret_ecoff = TRUE)
+
+See the [AMRgen vignette on downloading data](https://amrgen.org/articles/DownloadGenoPhenoData.html), for more on retrieving data from EBI/NCBI.
 
 # import study data and format it
 study1_ast <- read_tsv("AST.txt") %>%
@@ -163,44 +168,44 @@ study1_ast <- read_tsv("AST.txt") %>%
    mutate(mic = paste0(`Measurement sign`, `MIC (mg/L)`)) %>% # combine measurement sign with MIC value into single column
    mutate(mic = gsub("==", "", mic)) %>%
    mutate(mic = as.mic(mic)) %>% # format MIC values to class 'mic'
-   mutate(drug_agent = as.ab(Antibiotic)) %>% # format drug name to class 'ab'
+   mutate(drug = as.ab(Antibiotic)) %>% # format drug name to class 'ab'
    mutate(spp_pheno = as.mo(`Species name`)) %>% # format organism name to class 'mo' (optional unless you have data from multiple organisms in the same dataframe)
    mutate(method="Sensititre") %>%
    mutate(source="Study1")
 
 # interpret MIC data using EUCAST breakpoints and ECOFFs
-study1_ast <- interpret_ast(study1_ast, interpret_ecoff = TRUE, interpret_eucast = TRUE, interpret_clsi = FALSE, species = species, ab = ab)
+study1_ast <- interpret_pheno(study1_ast, interpret_ecoff = TRUE, interpret_eucast = TRUE, interpret_clsi = FALSE, species = species, ab = ab)
 ```
 
 ## Collate and format AMRfinderplus genotype data
-For use with the AMRrulemakeR package, you need to process the AMRfinderplus data using `import_afp()`, which generates consistent marker labels that will be the units of analysis, and which can ultimately be represented in the AMRrules variant specification format. It also parses refgene Class/Subclass into drug classes recognised by the AMR R packagea and CARD ARO. 
+For use with the AMRrulemakeR package, you need to process the AMRfinderplus data using `AMRgen::import_afp()`, which generates consistent marker labels that will be the units of analysis, and which can ultimately be represented in the AMRrules variant specification format. It also parses refgene Class/Subclass into drug classes recognised by the AMR R packagea and CARD ARO. 
 
 Example data frame included in the AMRgen package:
 
 ```
 > ecoli_geno_ebi
-# A tibble: 73,221 × 36
-   Name         gene  mutation node  `variation type` marker marker.label drug_agent drug_class status
-   <chr>        <chr> <chr>    <chr> <chr>            <chr>  <chr>        <ab>       <chr>      <chr> 
- 1 SAMN03177641 blaC… NA       blaC… Gene presence d… blaCM… blaCMY-2     NA         Cephalosp… PASS  
- 2 SAMN03177641 sul2  NA       sul2  Gene presence d… sul2   sul2         SSS        Sulfonami… PASS  
- 3 SAMN03177641 blaT… NA       blaT… Gene presence d… blaTE… blaTEM-1     NA         Beta-lact… PASS  
- 4 SAMN13024031 dfrA5 NA       dfrA5 Gene presence d… dfrA5  dfrA5        NA         Trimethop… PASS  
- 5 SAMN13024031 sul2  NA       sul2  Gene presence d… sul2   sul2         SSS        Sulfonami… PASS  
- 6 SAMN13024031 blaT… NA       blaT… Gene presence d… blaTE… blaTEM-1     NA         Beta-lact… PASS  
- 7 SAMN26308528 sul2  NA       sul2  Gene presence d… sul2   sul2         SSS        Sulfonami… PASS  
- 8 SAMD00499563 gyrA  Asp87Asn gyrA  Protein variant… gyrA_… gyrA:Asp87A… NA         Quinolones PASS  
- 9 SAMD00499563 gyrA  Ser83Leu gyrA  Protein variant… gyrA_… gyrA:Ser83L… NA         Quinolones PASS  
-10 SAMD00499563 parC  Glu84Val parC  Protein variant… parC_… parC:Glu84V… NA         Quinolones PASS  
+# A tibble: 229,007 × 37
+   id           marker     gene  mutation  drug drug_class   `variation type`         node  marker.label  
+   <chr>        <chr>      <chr> <chr>     <ab> <chr>        <chr>                    <chr> <chr>         
+ 1 SAMD00499013 parC_E84V  parC  Glu84Val  NA   Quinolones   Protein variant detected parC  parC:Glu84Val 
+ 2 SAMD00499013 parC_S80I  parC  Ser80Ile  NA   Quinolones   Protein variant detected parC  parC:Ser80Ile 
+ 3 SAMD00499013 parE_I529L parE  Ile529Leu NA   Quinolones   Protein variant detected parE  parE:Ile529Leu
+ 4 SAMD00499013 acrF       acrF  NA        NA   Efflux       Gene presence detected   acrF  acrF          
+ 5 SAMD00499013 pmrB_E123D pmrB  Glu123Asp COL  Polymyxins   Protein variant detected pmrB  pmrB:Glu123Asp
+ 6 SAMD00499013 blaEC      blaEC NA        NA   Beta-lactams Gene presence detected   blaEC blaEC         
+ 7 SAMD00499013 glpT_E448K glpT  Glu448Lys FOS  Phosphonics  Protein variant detected glpT  glpT:Glu448Lys
+ 8 SAMD00499013 gyrA_D87N  gyrA  Asp87Asn  NA   Quinolones   Protein variant detected gyrA  gyrA:Asp87Asn 
+ 9 SAMD00499013 gyrA_S83L  gyrA  Ser83Leu  NA   Quinolones   Protein variant detected gyrA  gyrA:Ser83Leu 
+10 SAMD00499013 emrD       emrD  NA        NA   Efflux       Gene presence detected   emrD  emrD        
 ```
 
 The key fields needed are:
-* `Name` - Sample name, must match that in the corresponding phenotype file.
+* `id` - Sample name, must match that in the corresponding phenotype file.
     * If using Allthebacteria genotype files this will be the biosample, facilitating matches to public phenotype data.
 * `gene`, `mutation`, `variation type` - Variant specification fields in AMRrules format, inferred from the `Gene symbol` and `Method` fields
 * `node` - NCBI reference gene hierarchy node ID corresponding to this hit, taken from `Hierarchy node` if available (otherwise copied from gene)
 * `marker` - Original content of `Gene symbol` field, ie matching the entry in NCBI refgene
-* `drug_agent` - Specific drug to which this marker applies (if an individual drug is named in the `Subclass` fields)
+* `drug` - Specific drug to which this marker applies (if an individual drug is named in the `Subclass` fields)
 * `drug_class` - Drug class to which this marker applies, mapped to classes in AMR package (taken from `Class` and `Subclass` fields)
 
 Notes: 
@@ -277,7 +282,7 @@ We can use the `assay_by_var` function to plot the distribution of MIC or disk m
 
 For example we can check ciprofloxacin MIC distributions by assay platform, highlighting values that are expressed as ranges.
 ```
-cip_mic_bymethod <- assay_by_var(ecoli_pheno_ebi, antibiotic="Ciprofloxacin", measure="mic", var="method",
+cip_mic_bymethod <- assay_by_var(ecoli_pheno_ebi, pheno_drug="Ciprofloxacin", measure="mic", colour_by="method",
                            species="Escherichia coli", bp_site="Non-meningitis")
 
 cip_mic_bymethod$plot
@@ -304,7 +309,7 @@ The function `amrrules_save()` takes these analysis results, and saves key table
 
 Example command
 ```
-# example data included in AMRrulemakeR package: EBI AST data for 19,797 E. coli tested against at least one of 5 drugs (ampicillin, ceftriaxone, ciprofloxacin, azithromycin, trimethoprim-sulfamethozole), with matching AMRfinderplus data from the Allthebacteria project:
+# example data included in AMRrulemakeR package: EBI AST data for 22,987 E. coli tested against at least one of 5 drugs (amikacin, ampicillin, azithromycin, ciprofloxacin, gentamicin, meropenem, trimethoprim-sulfamethozole), with matching AMRfinderplus data from the Allthebacteria project:
 ecoli_pheno_ebi
 ecoli_geno_ebi
 
@@ -315,7 +320,7 @@ info_obj <- ecoli_pheno_ebi %>% select(id, source, method)
 # with genetic markers associated with the corresponding drug class (e.g. quinolones)
 cip_analysis <- amrrules_analysis(geno_table=ecoli_geno_ebi,
                                     pheno_table=ecoli_pheno_ebi, 
-                                    antibiotic="Ciprofloxacin",
+                                    pheno_drug="Ciprofloxacin",
                                     drug_class_list=c("Quinolones"),
                                     sir_col="pheno_eucast", ecoff_col="ecoff",
                                     species="Escherichia coli",
@@ -355,7 +360,7 @@ cip_rules$predict_vs_obs_stats_byMethod$plot_sir    # stratified by assay method
 ```
 trimsulfa_analysis <- amrrules_analysis(geno_table=ecoli_geno_ebi,
                                     pheno_table=ecoli_pheno_ebi, 
-                                    antibiotic="Trimethoprim-Sulfamethoxazole",
+                                    pheno_drug="Trimethoprim-Sulfamethoxazole",
                                     drug_class_list=c("Trimethoprims", "Sulfonamides"),
                                     sir_col="pheno_eucast", ecoff_col="ecoff",
                                     species="Escherichia coli",
@@ -384,7 +389,7 @@ trimsulfa_rules$predict_vs_obs_stats_byMethod$plot_sir
 ```
 amp_analysis <- amrrules_analysis(geno_table=ecoli_geno_ebi,
                                     pheno_table=ecoli_pheno_ebi, 
-                                    antibiotic="Ampicillin",
+                                    pheno_drug="Ampicillin",
                                     drug_class_list=c("Beta-lactams/penicillins", "Cephalosporins", "Carbapenems"),
                                     sir_col="pheno_eucast", ecoff_col="ecoff",
                                     species="Escherichia coli",
@@ -410,7 +415,7 @@ For cephalosporin drugs we also need to consider all three classes, since many c
 ```
 cef_analysis <- amrrules_analysis(geno_table=ecoli_geno_ebi,
                                     pheno_table=ecoli_pheno_ebi, 
-                                    antibiotic="Ceftriaxone",
+                                    pheno_drug="Ceftriaxone",
                                     drug_class_list=c("Beta-lactams/penicillins", "Cephalosporins", "Carbapenems"),
                                     sir_col="pheno_eucast", ecoff_col="ecoff",
                                     species="Escherichia coli",

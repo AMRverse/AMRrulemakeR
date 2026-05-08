@@ -7,11 +7,11 @@
 rules_concordance(df, pheno_col = "pheno_eucast", pred_col = "category")
 }
 \arguments{
+\item{df}{A data frame containing observed and predicted phenotypes.}
+
 \item{pheno_col}{String indicating the name of the column containing the true phenotypes (default \code{"pheno_eucast"}).}
 
 \item{pred_col}{String indicating the name of the column containing the predicted phenotypes (default \code{"category"}).}
-
-\item{data}{A data frame containing observed and predicted phenotypes.}
 }
 \value{
 A list containing:

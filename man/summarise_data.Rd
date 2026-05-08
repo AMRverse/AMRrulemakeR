@@ -9,7 +9,7 @@ summarise_data(
   pheno_table,
   antibiotic,
   drug_class_list,
-  geno_sample_col = "Name",
+  geno_sample_col = "id",
   pheno_sample_col = "id",
   species,
   guide = "EUCAST 2025"
@@ -18,13 +18,13 @@ summarise_data(
 \arguments{
 \item{geno_table}{A data frame of genotypic data, including a column \code{drug_class} and sample IDs. Can be generated from AMRfinderplus output using \code{AMRgen::import_amrfp}}
 
-\item{pheno_table}{A data frame of phenotypic data, including susceptibility results and sample IDs. Required fields are \code{drug_agent}, \code{mic}, \code{disk}.}
+\item{pheno_table}{A data frame of phenotypic data, including susceptibility results and sample IDs. Required fields are \code{drug}, \code{mic}, \code{disk}.}
 
 \item{antibiotic}{A string naming the antibiotic of interest (eg: \code{"Ciprofloxacin"}), will be parsed using AMR::as.ab().}
 
 \item{drug_class_list}{A character vector of drug classes to include from the genotypic data (eg: \code{c("Quinolones")}).}
 
-\item{geno_sample_col}{The name of the column in \code{geno_table} that contains sample IDs (default: "Name").}
+\item{geno_sample_col}{The name of the column in \code{geno_table} that contains sample IDs (default: "id").}
 
 \item{pheno_sample_col}{The name of the column in \code{pheno_table} that contains sample IDs (default: "id").}
 
@@ -48,7 +48,8 @@ relevant genetic markers and susceptibility test results, and lists EUCAST break
 }
 \examples{
 \dontrun{
-summarise_data(geno_table, pheno_table, antibiotic = "Ciprofloxacin", drug_class_list=c("Quinolones"), species="E. coli")
+summarise_data(geno_table, pheno_table, antibiotic = "Ciprofloxacin",
+  drug_class_list=c("Quinolones"), species="E. coli")
 }
 
 }
