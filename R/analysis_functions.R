@@ -7,14 +7,14 @@
 #' It outputs data and plots used to assess AMR marker relevance, which can be used as input to the `makerules` function.
 #'
 #' @param geno_table A data frame of genotypic data with a `drug_class` column, sample IDs (specified using `geno_sample_col`), and AMR determinants (`marker`). Can be generated from AMRfinderplus output using `AMRgen::import_amrfp`.
-#' @param pheno_table A data frame of phenotypic data, including columns for sample IDs (specified using `pheno_sample_col`), antibiotic (`drug_agent`), MIC (`mic`), disk diffusion (`disk`), and S/I/R classification (specified using `sir_col`).
+#' @param pheno_table A data frame of phenotypic data, including columns for sample IDs (specified using `pheno_sample_col`), antibiotic (`drug`), MIC (`mic`), disk diffusion (`disk`), and S/I/R classification (specified using `sir_col`).
 #' @param antibiotic A string specifying the antibiotic to analyze (e.g., `"Ciprofloxacin"`).
 #' @param drug_class_list A character vector of drug classes whose attributed markers should be included in the analysis.
 #' @param species A string indicating the species name used for breakpoint and reference distribution lookups (e.g., `"E. coli"`).
 #' @param sir_col The name of the trusted S/I/R classification column to use, e.g. inferred from available MIC and/or disk data (default: `"pheno_eucast"`).
 #' @param ecoff_col The name of the column providing WT/NWT calls indicating the classification of each sample and drug against the ECOFF (default: `"ecoff"`).
 #' @param sir_provided_col The name of the extended S/I/R classification column, e.g. including calls provided as S/I/R but without assay measures to interpret directly (default: `"pheno_provided"`).
-#' @param geno_sample_col The column in \code{geno_table} with sample IDs (default: `"Name"`).
+#' @param geno_sample_col The column in \code{geno_table} with sample IDs (default: `"id"`).
 #' @param pheno_sample_col The column in \code{pheno_table} with sample IDs (default: `"id"`).
 #' @param marker_col A character string specifying the column name in `geno_table` containing the marker identifiers. Defaults to `"marker.label"`.
 #' @param minPPV Minimum number of samples required for a marker to be included in PPV analysis (default: 1).
@@ -28,6 +28,8 @@
 #' @param disk_S The disk breakpoint to define S (Optional, by default breakpoints are extracted using the AMR package, however if none are available or user wants to use a different one e.g. an ECOFF then it can be specified here).
 #' @param disk_R The disk breakpoint to define R (Optional, by default breakpoints are extracted using the AMR package, however if none are available or user wants to use a different one e.g. an ECOFF then it can be specified here).
 #' @param call_manual Logical indicating whether to interpret assay data manually against the provided S/R breakpoints, if they are provided. Otherwise we assume the input pheno_table object has interpreted phenotypes already (in column 'sir_col').
+#' @param gene_symbol_col String indicating the name of the column in the input genotype table (i.e. `geno_table`) containing the 'Gene symbol' field from raw AMRFinderPlus output. Default is `"Gene symbol`. If using processed genotypes downloaded from EBI using [download_ebi()] this will normally be "gene_symbol", if downloading from EBI via their website it may be "genotype-gene_symbol".
+#' @param element_type_col String indicating the name of the column in the input genotype table (i.e. `geno_table`) containing the 'Element type' field from raw AMRFinderPlus output. Default is `"Element type`. If using processed genotypes downloaded from EBI using [download_ebi()] this will normally be "element_type", if downloading from EBI via their website it may be "genotype-element_type".
 #'
 #' @return A list containing:
 #' \item{reference_mic_plot}{EUCAST reference MIC distribution plot}
@@ -68,12 +70,13 @@
 #' @export
 amrrules_analysis <- function(geno_table, pheno_table, antibiotic, drug_class_list, species,
                               sir_col="pheno_eucast", ecoff_col="ecoff", sir_provided_col="pheno_provided",
-                              geno_sample_col="Name", pheno_sample_col="id", marker_col="marker.label",
+                              geno_sample_col="id", pheno_sample_col="id", marker_col="marker.label",
                               minPPV=1, mafLogReg=5, mafUpset=1, info=NULL, excludeRanges=TRUE, bp_site=NULL,
                               mic_S=NULL, mic_R=NULL, disk_S=NULL, disk_R=NULL,
-                              use_mic=TRUE, use_disk=TRUE, call_manual=TRUE) {
+                              use_mic=TRUE, use_disk=TRUE, call_manual=TRUE,
+                              gene_symbol_col="Gene symbol", element_type_col="Element type") {
 
-  cat(paste("Starting analysis for", ab_name(as.ab(antibiotic)),"\n"))
+  message(paste("Starting analysis for", ab_name(as.ab(antibiotic))))
 
   # plot EUCAST reference distributions
   reference_mic <- safe_execute(AMRgen::get_eucast_mic_distribution(antibiotic, species))
@@ -84,28 +87,28 @@ amrrules_analysis <- function(geno_table, pheno_table, antibiotic, drug_class_li
   reference_disk <- safe_execute(rep(reference_disk$disk_diffusion, reference_disk$count))
   reference_disk_plot <- safe_execute(ggplot2::autoplot(reference_disk, ab = antibiotic, mo = species, title = "EUCAST reference disk zone distribtion"))
 
-  input_mic_sir_plot <- safe_execute(AMRgen::assay_by_var(pheno_table, antibiotic, measure="mic", facet_var=NULL,
+  input_mic_sir_plot <- safe_execute(AMRgen::assay_by_var(pheno_table, antibiotic, measure="mic", facet_by=NULL,
                                                           species=species, bp_site=bp_site, colour_by=sir_col))
-  input_mic_sir_plot_bymethod <- safe_execute(AMRgen::assay_by_var(pheno_table, antibiotic, measure="mic", facet_var="method",
+  input_mic_sir_plot_bymethod <- safe_execute(AMRgen::assay_by_var(pheno_table, antibiotic, measure="mic", facet_by="method",
                                   species=species, bp_site=bp_site, colour_by=sir_col))
-  input_mic_nwt_plot_bymethod <- safe_execute(AMRgen::assay_by_var(pheno_table, antibiotic, measure="mic", facet_var="method",
+  input_mic_nwt_plot_bymethod <- safe_execute(AMRgen::assay_by_var(pheno_table, antibiotic, measure="mic", facet_by="method",
                                                           species=species, bp_site=bp_site, colour_by=ecoff_col))
 
-  input_disk_sir_plot <- safe_execute(AMRgen::assay_by_var(pheno_table, antibiotic, measure="disk", facet_var=NULL,
+  input_disk_sir_plot <- safe_execute(AMRgen::assay_by_var(pheno_table, antibiotic, measure="disk", facet_by=NULL,
                                                            species=species, bp_site=bp_site, colour_by=sir_col))
-  input_disk_sir_plot_bymethod <- safe_execute(AMRgen::assay_by_var(pheno_table, antibiotic, measure="disk", facet_var="method",
+  input_disk_sir_plot_bymethod <- safe_execute(AMRgen::assay_by_var(pheno_table, antibiotic, measure="disk", facet_by="method",
                                                           species=species, bp_site=bp_site, colour_by=sir_col))
-  input_disk_nwt_plot_bymethod <- safe_execute(AMRgen::assay_by_var(pheno_table, antibiotic, measure="disk", facet_var="method",
+  input_disk_nwt_plot_bymethod <- safe_execute(AMRgen::assay_by_var(pheno_table, antibiotic, measure="disk", facet_by="method",
                                                           species=species, bp_site=bp_site, colour_by=ecoff_col))
 
   ### TO DO: improve this
   #summary <- safe_execute(summarise_data(geno_table, pheno_table, antibiotic=antibiotic, drug_class_list=drug_class_list, geno_sample_col=geno_sample_col, pheno_sample_col=pheno_sample_col, species=species))
 
-  cat("Running solo PPV analysis on samples with MIC or disk measures\n")
-  pheno_table_micdisk <- pheno_table %>% filter(!is.na(mic) | !is.na(disk)) %>% filter(drug_agent==as.ab(antibiotic))
+  message("Running solo PPV analysis on samples with MIC or disk measures")
+  pheno_table_micdisk <- pheno_table %>% filter(!is.na(mic) | !is.na(disk)) %>% filter(drug==as.ab(antibiotic))
 
   if (call_manual & !is.null(mic_S) & !is.null(mic_R) & sum(!is.na(pheno_table_micdisk$mic))>0) {
-    cat(" Manually calling SIR using provided MIC breakpoints\n")
+    message(" Manually calling SIR using provided MIC breakpoints")
     pheno_table_micdisk_mic <- pheno_table_micdisk %>% filter(!is.na(mic)) %>%
                                 mutate(!!sym(sir_col):=case_when(!grepl(">",mic) & as.numeric(sub("<","",(sub("=","",mic))))<=mic_S ~ "S",
                                                            !grepl("<",mic) & as.numeric(sub(">","",(sub("=","",mic))))>mic_R ~ "R",
@@ -118,7 +121,7 @@ amrrules_analysis <- function(geno_table, pheno_table, antibiotic, drug_class_li
   }
 
   if (call_manual & !is.null(disk_S) & !is.null(disk_R) & sum(!is.na(pheno_table_micdisk$mic))>0) {
-    cat(" Manually calling SIR using provided disk breakpoints\n")
+    message(" Manually calling SIR using provided disk breakpoints")
     pheno_table_micdisk_disk <- pheno_table_micdisk %>% filter(!is.na(disk)) %>%
                                   mutate(!!sym(sir_col):=case_when(!grepl("<",disk) & as.numeric(sub(">","",(sub("=","",mic))))>=disk_S ~ "S",
                                                                    !grepl(">",disk) & as.numeric(sub("<","",(sub("=","",mic))))<disk_R ~ "R",
@@ -130,32 +133,29 @@ amrrules_analysis <- function(geno_table, pheno_table, antibiotic, drug_class_li
     pheno_table_micdisk <- bind_rows(pheno_table_micdisk_mic, pheno_table_micdisk_disk)
   }
 
-  #soloPPV_micdisk <- safe_execute(AMRgen::solo_ppv_analysis(geno_table=geno_table, pheno_table=pheno_table_micdisk, antibiotic=antibiotic, drug_class_list=drug_class_list, sir_col=sir_col, ecoff_col=ecoff_col, min=minPPV, marker_col=marker_col, icat=TRUE))
+  #soloPPV_micdisk <- safe_execute(AMRgen::solo_ppv(geno_table=geno_table, pheno_table=pheno_table_micdisk, pheno_drug=antibiotic, geno_class=drug_class_list, sir_col=sir_col, ecoff_col=ecoff_col, min=minPPV, marker_col=marker_col, icat=TRUE))
   check_solo <- checkMICranges(geno_table, pheno_table_micdisk, antibiotic=antibiotic, drug_class_list=drug_class_list,
                                species=species, bp_site=bp_site, excludeRanges="NWT", marker_col=marker_col,
                                sir_col=sir_col, ecoff_col=ecoff_col, min=minPPV)
   soloPPV_micdisk <- check_solo$soloPPV_micdisk
 
-  cat("Running logistic regression on samples with MIC or disk measures\n")
-  logistic_micdisk <- safe_execute(AMRgen::amr_logistic(geno_table=geno_table, pheno_table=pheno_table_micdisk, antibiotic=antibiotic, drug_class_list=drug_class_list, sir_col=sir_col, ecoff_col=ecoff_col, maf=mafLogReg, geno_sample_col=geno_sample_col, pheno_sample_col=pheno_sample_col, marker_col=marker_col))
+  message("Running logistic regression on samples with MIC or disk measures")
+  logistic_micdisk <- safe_execute(AMRgen::amr_logistic(geno_table=geno_table, pheno_table=pheno_table_micdisk, pheno_drug=antibiotic, geno_class=drug_class_list, sir_col=sir_col, ecoff_col=ecoff_col, maf=mafLogReg, geno_sample_col=geno_sample_col, pheno_sample_col=pheno_sample_col, marker_col=marker_col))
 
-  cat("Combining PPV and regression stats for samples with MIC or disk measures\n")
+  message("Combining PPV and regression stats for samples with MIC or disk measures")
   # combined PPV/logistic plot for samples with MIC or disk measures
   ppv_logistic_plot_micdisk <- safe_execute(soloPPV_micdisk$combined_plot + logistic_micdisk$plot + scale_y_discrete(limits = names(soloPPV_micdisk$plot_order)) + labs(y="") +
                                       theme(legend.position="none") + ggtitle("Logistic regression"))
 
-  cat("Generating upset plots, with PPV and median measures for marker combinations\n")
+  message("Generating upset plots, with PPV and median measures for marker combinations")
 
-  cat("...MIC ")
+  message("...MIC ")
   upset_mic <- safe_execute(AMRgen::amr_upset(soloPPV_micdisk$amr_binary, min_set_size=mafUpset, order="value", assay="mic"))
 
-  cat("...disk ")
+  message("...disk ")
   upset_disk <- safe_execute(AMRgen::amr_upset(soloPPV_micdisk$amr_binary, min_set_size=mafUpset, order="value", assay="disk"))
 
-  cat("\n")
-
-
-  ### NEW: merge pheno and ecoff data from MIC/disk values with those from SIR, to give tier-2 info
+  ### merge pheno and ecoff data from MIC/disk values with those from SIR, to give tier-2 info
 
   pheno_table_sir <- pheno_table %>%
     filter(is.na(mic) & is.na(disk))
@@ -169,13 +169,13 @@ amrrules_analysis <- function(geno_table, pheno_table, antibiotic, drug_class_li
                            TRUE ~ NA)) %>%
     bind_rows(pheno_table_micdisk %>% rename(pheno=!!sir_col) %>% rename(ecoff=!!ecoff_col))
 
-    cat("Running solo PPV analysis on all samples, including those with SIR calls only\n")
-    soloPPV_sir <- safe_execute(AMRgen::solo_ppv_analysis(geno_table=geno_table, pheno_table=pheno_table_sir, antibiotic=antibiotic, drug_class_list=drug_class_list, sir_col="pheno", ecoff_col="ecoff", min=minPPV, marker_col=marker_col, icat=TRUE))
+    message("Running solo PPV analysis on all samples, including those with SIR calls only")
+    soloPPV_sir <- safe_execute(AMRgen::solo_ppv(geno_table=geno_table, pheno_table=pheno_table_sir, pheno_drug=antibiotic, geno_class=drug_class_list, sir_col="pheno", ecoff_col="ecoff", min=minPPV, marker_col=marker_col, icat=TRUE))
 
-    cat("Running logistic regression on all samples, including those with SIR calls only\n")
-    logistic_sir <- safe_execute(AMRgen::amr_logistic(geno_table=geno_table, pheno_table=pheno_table_sir, antibiotic=antibiotic, drug_class_list=drug_class_list, sir_col="pheno", ecoff_col="ecoff", maf=mafLogReg, geno_sample_col=geno_sample_col, pheno_sample_col=pheno_sample_col, marker_col=marker_col))
+    message("Running logistic regression on all samples, including those with SIR calls only")
+    logistic_sir <- safe_execute(AMRgen::amr_logistic(geno_table=geno_table, pheno_table=pheno_table_sir, pheno_drug=antibiotic, geno_class=drug_class_list, sir_col="pheno", ecoff_col="ecoff", maf=mafLogReg, geno_sample_col=geno_sample_col, pheno_sample_col=pheno_sample_col, marker_col=marker_col))
 
-    cat("Combining PPV and regression stats for all samples\n")
+    message("Combining PPV and regression stats for all samples")
     # combined PPV/logistic plot for samples with MIC or disk measures
     if (!is.null(logistic_sir$plot)) {
       ppv_logistic_plot_sir <- safe_execute(soloPPV_sir$combined_plot + logistic_sir$plot + scale_y_discrete(limits = names(soloPPV_sir$plot_order)) + labs(y="") +
@@ -183,17 +183,21 @@ amrrules_analysis <- function(geno_table, pheno_table, antibiotic, drug_class_li
     } else {ppv_logistic_plot_sir <- safe_execute(soloPPV_sir$combined_plot)}
   }
 
-  cat("Extracting gene info\n")
+  message("Extracting gene info")
 
   # return AMRFP info for all unique markers in this class with any pheno data
   overlap <- AMRgen::compare_geno_pheno_id(geno_table %>% filter(drug_class %in% drug_class_list),
-                                           pheno_table %>% filter(drug_agent==as.ab(antibiotic)),
+                                           pheno_table %>% filter(drug==as.ab(antibiotic)),
                                            geno_sample_col = geno_sample_col,
                                            pheno_sample_col = pheno_sample_col, rename_id_cols = T)
 
-  afp_hits <- overlap$geno_matched %>%
-    filter(`Element type`=="AMR") %>%
-    select(any_of(c("marker", "gene", "mutation", "node", "variation type", "marker.label", "Gene symbol", "Element subtype", "HMM id"))) %>%
+  if (element_type_col %in% colnames(overlap$geno_matched)) {
+    afp_hits <- overlap$geno_matched %>%
+      filter(!!sym(element_type_col)=="AMR")
+  } else { afp_hits <- overlap$geno_matched }
+
+  afp_hits <- afp_hits %>%
+    select(any_of(c("marker", "gene", "mutation", "node", "variation type", "marker.label", gene_symbol_col, "HMM id"))) %>%
     distinct()
 
   # add gene frequencies to help define core/accessory
@@ -205,7 +209,7 @@ amrrules_analysis <- function(geno_table, pheno_table, antibiotic, drug_class_li
 
   # extract info for relevant samples (for source enumeration)
   if (!is.null(info)) {
-    samples_with_pheno <- pheno_table %>% filter(drug_agent==as.ab(antibiotic))
+    samples_with_pheno <- pheno_table %>% filter(drug==as.ab(antibiotic))
     colnames(info)[1] <- "id"
     info <- info %>% filter(id %in% samples_with_pheno$id)
   }
@@ -258,7 +262,8 @@ amrrules_analysis <- function(geno_table, pheno_table, antibiotic, drug_class_li
               info=info,
               pheno_table_micdisk=pheno_table_micdisk,
               pheno_table=pheno_table,
-              geno_table=geno_table))
+              geno_table=geno_table,
+              gene_symbol_col=gene_symbol_col))
 }
 
 #' Save AMR Geno-Pheno Analysis Results and Plots to Files and Draft AMRrules
@@ -323,11 +328,11 @@ amrrules_save <- function(amrrules, width=9, height=9, dir_path, outdir_name=NUL
   outdir_path <- file.path(dir_path, outdir_name)
   if (!dir.exists(outdir_path)) {
     safe_execute(dir.create(outdir_path, recursive=TRUE))
-    cat(paste0("Directory '", outdir_path, "' created successfully.\n"))
+    message(paste0("Directory '", outdir_path, "' created successfully."))
   }
   outpath_main <- file.path(outdir_path, file_prefix)
 
-  cat(paste0("\nWriting figs and tables to ", outpath_main,"*\n"))
+  message(paste0("\nWriting figs and tables to ", outpath_main,"*"))
 
   # reference distributions
   # subdirectory distributions/
@@ -363,11 +368,11 @@ amrrules_save <- function(amrrules, width=9, height=9, dir_path, outdir_name=NUL
 
   if (!is.null(amrrules$upset_mic_plot)) {safe_execute(ggsave(amrrules$upset_mic_plot, filename=paste0(outpath_ppv,"_MIC_upset.pdf"), width=width*1.5, height=height))}
   if (!is.null(amrrules$upset_mic_summary)) {safe_execute(readr::write_tsv(amrrules$upset_mic_summary, file=paste0(outpath_ppv,"_MIC_summary.tsv")))}
-  else {cat ("  (No MIC data summary available to write)\n")}
+  else {message("  (No MIC data summary available to write)")}
 
   if (!is.null(amrrules$upset_disk_plot)) {safe_execute(ggsave(amrrules$upset_disk_plot, filename=paste0(outpath_ppv,"_disk_upset.pdf"), width=width*1.5, height=height))}
   if (!is.null(amrrules$upset_disk_summary)) {safe_execute(readr::write_tsv(amrrules$upset_disk_summary, file=paste0(outpath_ppv,"_disk_summary.tsv")))}
-  else {cat ("  (No disk diffusion data summary available to write)\n")}
+  else {message("  (No disk diffusion data summary available to write)")}
 
 
   # subdirectory ppv_compare/
@@ -395,7 +400,6 @@ amrrules_save <- function(amrrules, width=9, height=9, dir_path, outdir_name=NUL
 
   # make rules and write them out to same directory
   if (makeRules) {
-    cat ("\n")
     rules <- safe_execute(makerules(amrrules, minObs=minObs, low_threshold=low_threshold, bp_site=bp_site,
                                     ruleID_start=ruleID_start, mic_S=mic_S, mic_R=mic_R,
                                     disk_S=disk_S, disk_R=disk_R, use_disk=use_disk, guide=guide,
@@ -403,9 +407,9 @@ amrrules_save <- function(amrrules, width=9, height=9, dir_path, outdir_name=NUL
     if (!is.null(rules)) {
       safe_execute(readr::write_tsv(rules$rules, file=paste0(outpath_main,"_AMRrules.tsv")))
       safe_execute(readr::write_tsv(rules$data, file=paste0(outpath_main,"_AMRrules_data.tsv")))
-      cat(paste0("\nWriting rules to ",outpath_main,"_AMRrules.tsv\n"))
+      message(paste0("\nWriting rules to ",outpath_main,"_AMRrules.tsv"))
 
-      cat (" Comparing primary calls (solo PPV from MIC/disk data) with other evidence\n")
+      message(" Comparing primary calls (solo PPV from MIC/disk data) with other evidence")
       rule_compare_R <- safe_execute(compareRulesData(rules$data, antibiotic=amrrules$antibiotic, drug_class_list=amrrules$drug_class_list, type="R"))
       rule_compare_I <- safe_execute(compareRulesData(rules$data, antibiotic=amrrules$antibiotic, drug_class_list=amrrules$drug_class_list, type="I"))
       rule_compare_NWT <- safe_execute(compareRulesData(rules$data, antibiotic=amrrules$antibiotic, drug_class_list=amrrules$drug_class_list, type="NWT"))
@@ -426,12 +430,12 @@ amrrules_save <- function(amrrules, width=9, height=9, dir_path, outdir_name=NUL
         }
         outpath_pred <- file.path(outdir_path_pred, file_prefix)
 
-        cat (" Predicting phenotypes by applying rules to interpret genotypes (can take a few minutes)\n")
-        test_vs_rules <- safe_execute(test_rules_amrfp(amrrules$geno_table %>% filter(Name %in% amrrules$pheno_table_micdisk$id), rules$rules, amrrules$species))
+        message(" Predicting phenotypes by applying rules to interpret genotypes (can take a few minutes)")
+        test_vs_rules <- safe_execute(test_rules_amrfp(amrrules$geno_table %>% filter(id %in% amrrules$pheno_table_micdisk$id), rules$rules, amrrules$species))
         safe_execute(readr::write_tsv(test_vs_rules, file=paste0(outpath_pred,"_predictionsFromRules.tsv")))
 
         if (!is.null(amrrules$pheno_table)) {
-          cat (" Comparing phenotypes predicted from rules vs observed phenotypes (for samples with MIC/disk assay data)\n")
+          message(" Comparing phenotypes predicted from rules vs observed phenotypes (for samples with MIC/disk assay data)")
           compare_pred <- safe_execute(compare_interpretations(pred=test_vs_rules,
                                                                obs=amrrules$pheno_table,
                                                                antibiotic=amrrules$antibiotic,
@@ -481,22 +485,19 @@ amrrules_save <- function(amrrules, width=9, height=9, dir_path, outdir_name=NUL
 
 
         } # finish comparing predictions to data
-        else {cat ("  Not comparing predictions to observed phenotypes as no pheno_table provided")}
+        else {message("  Not comparing predictions to observed phenotypes as no pheno_table provided")}
       } # finish with predictions
       else {
-        cat ("  Not predicting phenotypes by applying rules to interpret genotypes")
-        if (testRules & is.null(amrrules$geno_table)) {cat(" (testRules=TRUE but no geno_table provided)")}
-        else if (!testRules) {cat(" (testRules=FALSE)")}
-        cat("\n")
+        message("  Not predicting phenotypes by applying rules to interpret genotypes")
+        if (testRules & is.null(amrrules$geno_table)) {message(" (testRules=TRUE but no geno_table provided)")}
+        else if (!testRules) {message(" (testRules=FALSE)")}
       }
     }
-    else{cat("Failed to make rules\n\n")}
+    else{message("Failed to make rules")}
   }
   else {
-    cat("Not making rules (rerun with makeRules=TRUE to generate rules)\n")
+    message("Not making rules (rerun with makeRules=TRUE to generate rules)")
   }
-
-  cat ("\n")
 
   return(list(rules=rules$rules,
               data=rules$data,

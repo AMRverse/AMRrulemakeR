@@ -49,15 +49,15 @@ library(AMRrulemakeR)
 library(tidyverse)
 
 # example data included in AMRrulemakeR package
-ecoli_ast_ebi
-ecoli_afp_atb
+ecoli_pheno_ebi
+ecoli_geno_ebi
 
 # run quantitative analyses for ciprofloxacin phenotypes vs quinolone marker genotypes, using the S/I/R calls made against EUCAST breakpoints
-cip_analysis <- amrrules_analysis(geno_table=ecoli_afp_atb, pheno_table=ecoli_ast_ebi, 
+cip_analysis <- amrrules_analysis(geno_table=ecoli_geno_ebi, pheno_table=ecoli_pheno_ebi, 
                                     antibiotic="Ciprofloxacin", drug_class_list=c("Quinolones"),
                                     sir_col="pheno_eucast", ecoff_col="ecoff",
                                     species="Escherichia coli",
-                                    info=ecoli_ast_ebi %>% select(id, source, method))
+                                    info=ecoli_pheno_ebi %>% select(id, source, method))
 
 # check key output plots
 cip_analysis$ppv_plot
@@ -77,15 +77,15 @@ cip_rules <- makerules(cip_analysis, bp_site="Non-meningitis")
 view(cip_rules$rules)
 
 # manually apply rules to interpret quinolone marker genotypes
-cip_test <- test_rules_amrfp(ecoli_afp_atb %>% filter(drug_class %in% c("Quinolones")),
+cip_test <- test_rules_amrfp(ecoli_geno_ebi %>% filter(drug_class %in% c("Quinolones")),
                                  rules=cip_rules$rules, species="Escherichia coli")
 
 # compare these to the input phenotypes
-cip_test %>% left_join(ecoli_ast_ebi, join_by("Name"=="id")) %>% count(category,pheno_eucast)
+cip_test %>% left_join(ecoli_pheno_ebi, join_by("Name"=="id")) %>% count(category,pheno_eucast)
 
 # make some plots to view predictions vs raw assay values from different methods, and
 # explore positive predictive value of the overall ruleset including stratified by method 
-compare_pred <- compare_interpretations(pred=cip_test, obs=ecoli_ast_ebi,
+compare_pred <- compare_interpretations(pred=cip_test, obs=ecoli_pheno_ebi,
                                         antibiotic="Ciprofloxacin",
                                         sir_col="pheno_eucast", ecoff_col="ecoff",
                                         var="method")
@@ -111,7 +111,7 @@ Or you can format your data manually.
 Example data frame containg data from EBI on E. coli with AST results for five drugs, imported using import_ast():
 
 ```
-> ecoli_ast_ebi %>% filter(!is.na(mic))
+> ecoli_pheno_ebi %>% filter(!is.na(mic))
 # A tibble: 43,288 × 47
    id        drug_agent   mic  disk pheno_eucast pheno_clsi ecoff guideline method source pheno_provided spp_pheno   
    <chr>     <ab>       <mic> <dsk> <sir>        <sir>      <sir> <chr>     <chr>  <chr>  <sir>          <mo>        
@@ -178,7 +178,7 @@ For use with the AMRrulemakeR package, you need to process the AMRfinderplus dat
 Example data frame included in the AMRgen package:
 
 ```
-> ecoli_afp_atb
+> ecoli_geno_ebi
 # A tibble: 73,221 × 36
    Name         gene  mutation node  `variation type` marker marker.label drug_agent drug_class status
    <chr>        <chr> <chr>    <chr> <chr>            <chr>  <chr>        <ab>       <chr>      <chr> 
@@ -277,13 +277,13 @@ We can use the `assay_by_var` function to plot the distribution of MIC or disk m
 
 For example we can check ciprofloxacin MIC distributions by assay platform, highlighting values that are expressed as ranges.
 ```
-cip_mic_bymethod <- assay_by_var(ecoli_ast_ebi, antibiotic="Ciprofloxacin", measure="mic", var="method",
+cip_mic_bymethod <- assay_by_var(ecoli_pheno_ebi, antibiotic="Ciprofloxacin", measure="mic", var="method",
                            species="Escherichia coli", bp_site="Non-meningitis")
 
 cip_mic_bymethod$plot
 
 # summarise BD Phoenix data
-ecoli_ast_ebi %>% filter(drug_agent==as.ab("Ciprofloxacin") & method=="BD Phoenix") %>% count(mic,pheno_eucast)
+ecoli_pheno_ebi %>% filter(drug_agent==as.ab("Ciprofloxacin") & method=="BD Phoenix") %>% count(mic,pheno_eucast)
 # A tibble: 6 × 3
     mic pheno_eucast     n
   <mic> <sir>        <int>
@@ -305,16 +305,16 @@ The function `amrrules_save()` takes these analysis results, and saves key table
 Example command
 ```
 # example data included in AMRrulemakeR package: EBI AST data for 19,797 E. coli tested against at least one of 5 drugs (ampicillin, ceftriaxone, ciprofloxacin, azithromycin, trimethoprim-sulfamethozole), with matching AMRfinderplus data from the Allthebacteria project:
-ecoli_ast_ebi
-ecoli_afp_atb
+ecoli_pheno_ebi
+ecoli_geno_ebi
 
 # extract the information fields we want to consider in the analyses (source, method)
-info_obj <- ecoli_ast_ebi %>% select(id, source, method)
+info_obj <- ecoli_pheno_ebi %>% select(id, source, method)
 
 # run the required analyses to compare phenotypes for a specific drug (e.g. ciprofloxacin, excluding BD Phoenix measures)
 # with genetic markers associated with the corresponding drug class (e.g. quinolones)
-cip_analysis <- amrrules_analysis(geno_table=ecoli_afp_atb,
-                                    pheno_table=ecoli_ast_ebi, 
+cip_analysis <- amrrules_analysis(geno_table=ecoli_geno_ebi,
+                                    pheno_table=ecoli_pheno_ebi, 
                                     antibiotic="Ciprofloxacin",
                                     drug_class_list=c("Quinolones"),
                                     sir_col="pheno_eucast", ecoff_col="ecoff",
@@ -330,7 +330,7 @@ cip_analysis$upset_mic_plot
 
 # note this has very litte information content as there is very limited public disk data for ciprofloxacin (n=240)
 cip_analysis$upset_disk_plot 
-ecoli_ast_ebi %>% filter(drug_agent==as.ab("Ciprofloxacin")) %>% filter(!is.na(disk))
+ecoli_pheno_ebi %>% filter(drug_agent==as.ab("Ciprofloxacin")) %>% filter(!is.na(disk))
 
 # use the results of these analyses to define rules, then apply the rules back to the data to predict phenotypes
 # write out files and figures for the analysis, assay distributions, and predicted vs observed phenotypes
@@ -353,8 +353,8 @@ cip_rules$predict_vs_obs_stats_byMethod$plot_sir    # stratified by assay method
 
 **Combination antibiotics:** Trimethoprim-sulfamethoazole is a commonly used combination drug. To define rules for its resistance, we need to consider markers associated with resistance to both classes included in the combination, via `drug_class_list=c("Trimethoprims", "Sulfonamides")`:
 ```
-trimsulfa_analysis <- amrrules_analysis(geno_table=ecoli_afp_atb,
-                                    pheno_table=ecoli_ast_ebi, 
+trimsulfa_analysis <- amrrules_analysis(geno_table=ecoli_geno_ebi,
+                                    pheno_table=ecoli_pheno_ebi, 
                                     antibiotic="Trimethoprim-Sulfamethoxazole",
                                     drug_class_list=c("Trimethoprims", "Sulfonamides"),
                                     sir_col="pheno_eucast", ecoff_col="ecoff",
@@ -380,10 +380,10 @@ trimsulfa_rules$predict_vs_obs_stats_byMethod$plot_sir
 ```
 
 **Beta-lactam antibiotics:** Beta-lactamases classified as cephalosporinases (class 'Cephalosporins' in NCBI refgene) have activity against narrow-spectrum beta-lactam drugs (such as ampicillin) as well as cephalosporins. Beta-lactamases classified as carbapenemases (class 'Carbapenems' in NCBI refgene) also have activity against narrow-spectrum beta-lactam drugs and cephalosporins as well as carbapenems. So to analyse geno-pheno relationships for beta-lactam drugs like ampicillin, we need to consider all three classes of markers in AMRfinderplus output that have activity against beta-lactams: `drug_class_list=c("Beta-lactams/penicillins", "Cephalosporins", "Carbapenems")`. 
-(Note the ecoli_afp_atb example genotypes have already had blaEC calls removed, as this a core gene that doesn't contribute to resistance.)
+(Note the ecoli_geno_ebi example genotypes have already had blaEC calls removed, as this a core gene that doesn't contribute to resistance.)
 ```
-amp_analysis <- amrrules_analysis(geno_table=ecoli_afp_atb,
-                                    pheno_table=ecoli_ast_ebi, 
+amp_analysis <- amrrules_analysis(geno_table=ecoli_geno_ebi,
+                                    pheno_table=ecoli_pheno_ebi, 
                                     antibiotic="Ampicillin",
                                     drug_class_list=c("Beta-lactams/penicillins", "Cephalosporins", "Carbapenems"),
                                     sir_col="pheno_eucast", ecoff_col="ecoff",
@@ -408,8 +408,8 @@ amp_rules$predict_vs_obs_stats_byMethod$plot_sir
 For cephalosporin drugs we also need to consider all three classes, since many carbapenemases are expected to act on cephalosporins, and in principle any beta-lactamases can have some activity against cephalosporins that in combination with other markers may be clinically relevant. It is also important to define rules for beta-lactamases that do NOT confer resistance when found solo, so we can explicitly encode 'WT S' rules for these. The same logic applies for defining rules for carbapenems.
 
 ```
-cef_analysis <- amrrules_analysis(geno_table=ecoli_afp_atb,
-                                    pheno_table=ecoli_ast_ebi, 
+cef_analysis <- amrrules_analysis(geno_table=ecoli_geno_ebi,
+                                    pheno_table=ecoli_pheno_ebi, 
                                     antibiotic="Ceftriaxone",
                                     drug_class_list=c("Beta-lactams/penicillins", "Cephalosporins", "Carbapenems"),
                                     sir_col="pheno_eucast", ecoff_col="ecoff",
@@ -446,8 +446,8 @@ We could either do this by manually defining a phenotype column in our `pheno_ta
   <chr>       <chr> <chr> <chr>  <chr> <mo>              <dbl> <ab> <chr>   <chr>            <dbl>        <dbl> <lgl> <lgl> 
 1 EUCAST 2025 ECOFF ECOFF MIC    NA    B_ESCHR_COLI          2 AZM  ECOFF   NA                  16           16 FALSE FALSE
 
-azi_analysis <- amrrules_analysis(geno_table=ecoli_afp_atb,
-                                    pheno_table=ecoli_ast_ebi, 
+azi_analysis <- amrrules_analysis(geno_table=ecoli_geno_ebi,
+                                    pheno_table=ecoli_pheno_ebi, 
                                     antibiotic="Azithromycin",
                                     drug_class_list=c("Macrolides", "Macrolides/lincosamides"),
                                     sir_col="pheno_eucast", ecoff_col="ecoff",

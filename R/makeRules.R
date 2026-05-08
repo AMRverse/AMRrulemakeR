@@ -26,6 +26,7 @@
 #' @param regression Logical indicating whether to consider logistic regression data (only used to define wildtype S for an individual marker, where the p-value exceeds 0.05 and odds ratio crosses 0, and there is no solo-marker data available). Default is `TRUE`.
 #' @param expected_R Logical indicating whether to manually enforce whether or not this drug is an expected 'R' for this species. If NULL, we will check if this species & drug is included in `AMR::intrinsic_resistant`.
 #' @param expected_I Logical indicating whether to manually enforce whether or not this drug should be reported as 'I' for this species. If NULL, we will check the S breakpoints and assume if this is set to 0.001 (MIC), or 50 (disk) this drug should always be reported as I not S.
+#' @param gene_symbol_col String indicating the name of the column in the input genotype table (i.e. `amrrules$geno_table`) containing the 'Gene symbol' field from raw AMRFinderPlus output. Default is `"Gene symbol`. If using processed genotypes downloaded from EBI using [download_ebi()] this will normally be "gene_symbol", if downloading from EBI via their website it may be "genotype-gene_symbol".
 #'
 #' @return A list containing 2 data frames:
 #'   - `rules`: The draft rules in AMRrules format (spec v0.6), with some additional quantitative data fields to support review.
@@ -67,28 +68,28 @@ makerules <- function(amrrules, minObs=3, low_threshold=20, core_threshold=0.9,
 
   antibiotic <- amrrules$antibiotic
 
-  cat(paste("Generating AMRrules for", antibiotic, "in", amrrules$species,"\n"))
+  message(paste("Generating AMRrules for", antibiotic, "in", amrrules$species))
 
-  cat(" Checking parameters\n")
+  message(" Checking parameters")
   check_ruleID_start <- as.integer(ruleID_start)
   if(is.na(check_ruleID_start)) {stop(paste("Need valid integer to start numbering rules, specified via 'ruleID_start':", ruleID_start,"is not valid"))}
 
   # check if we have a valid ruleID prefix
   if(is.null(rule_prefix)) {
-    cat ("Determining rule prefix\n")
+    message("Determining rule prefix")
     rule_prefix <- organism_codes %>% filter(mo==as.mo(amrrules$species)) %>% pull(Prefix) # try using species
     if (rlang::is_empty(rule_prefix)) {
-      cat ("Species not in organism code list, checking for genus ")
+      message_to_print <- "Species not in organism code list, checking for genus "
       genus <- AMR::microorganisms %>% filter(mo==as.mo(amrrules$species)) %>% pull(genus) # try using genus
-      cat(paste(genus, "\n"))
+      message(paste(message_to_print, genus))
       rule_prefix <- organism_codes %>% filter(mo==as.mo(genus)) %>% pull(Prefix)
     }
     if (rlang::is_empty(rule_prefix)) {
       stop(paste("Could not determine valid rule ID prefix to use based on the species name:", amrrules$species, "- please specify directly using 'rule_prefix'"))
     }
-    else{cat(paste("  Determined rule ID prefix:",rule_prefix,"\n"))}
+    else{message(paste("  Determined rule ID prefix:",rule_prefix))}
   }
-  else{cat(paste("  Using user-specified rule ID prefix:",rule_prefix,"\n"))}
+  else{message(paste("  Using user-specified rule ID prefix:",rule_prefix))}
 
   bp_standard_mic <- bp_site
   bp_standard_disk <- bp_site
@@ -98,10 +99,10 @@ makerules <- function(amrrules, minObs=3, low_threshold=20, core_threshold=0.9,
 
     # check we have MIC data
     if (is.null(amrrules$upset_mic_summary)) {
-      cat("  WARNING: 'use_mic' set to TRUE but there are is no MIC summary data ($upset_mic_summary) in the input object\n")
+      message("  WARNING: 'use_mic' set to TRUE but there are is no MIC summary data ($upset_mic_summary) in the input object")
       use_mic <- FALSE
     } else if (nrow(amrrules$upset_mic_summary %>% filter(marker_count>0))==0) {
-      cat("  WARNING: 'use_mic' set to TRUE but the MIC summary data ($upset_mic_summary) in the input object is empty\n")
+      message("  WARNING: 'use_mic' set to TRUE but the MIC summary data ($upset_mic_summary) in the input object is empty")
       use_mic <- FALSE
     }
   }
@@ -113,24 +114,24 @@ makerules <- function(amrrules, minObs=3, low_threshold=20, core_threshold=0.9,
       mic_R <- bp$breakpoint_R
       bp_standard_mic <- bp$bp_standard
     }
-    else{cat(paste("  Using user-specified MIC breakpoints: S <=", mic_S,"and R >", mic_R,"\n"))}
+    else{message(paste("  Using user-specified MIC breakpoints: S <=", mic_S,"and R >", mic_R))}
 
     if (is.null(mic_ecoff)) { # determine MIC ECOFF
       ecoffs <- getBreakpoints(amrrules$species, guide, antibiotic, "ECOFF") %>% filter(method=="MIC")
       if (nrow(ecoffs)==0) {
-        cat("  Could not determine MIC ECOFF using AMR package, using S breakpoint, consider providing your own value via 'mic_ecoff'\n")
+        message("  Could not determine MIC ECOFF using AMR package, using S breakpoint, consider providing your own value via 'mic_ecoff'")
         mic_ecoff <- mic_S
       }
       else {
         mic_ecoff <- ecoffs %>% pull(breakpoint_S) %>% first()
         if (is.na(mic_ecoff)) {
-          cat("  Could not determine MIC ECOFF using AMR package, using S breakpoint, consider providing your own value via 'mic_ecoff'\n")
+          message("  Could not determine MIC ECOFF using AMR package, using S breakpoint, consider providing your own value via 'mic_ecoff'")
           mic_ecoff <- mic_S
         }
-        else{cat(paste("  MIC ECOFF determined using AMR package:", mic_ecoff,"\n"))}
+        else{message(paste("  MIC ECOFF determined using AMR package:", mic_ecoff))}
       }
     }
-    else{cat(paste("  Using user-specified MIC ECOFF:", mic_ecoff,"\n"))}
+    else{message(paste("  Using user-specified MIC ECOFF:", mic_ecoff))}
   }
 
   # retrieve disk breakpoints/ECOFF if needed
@@ -138,11 +139,11 @@ makerules <- function(amrrules, minObs=3, low_threshold=20, core_threshold=0.9,
 
     # check we have disk data - don't stop but warn, and set use_disk to false if none available
     if (is.null(amrrules$upset_disk_summary)) {
-      cat("  WARNING: 'use_disk' set to TRUE but there are is no disk summary data ($upset_disk_summary) in the input object\n")
+      message("  WARNING: 'use_disk' set to TRUE but there are is no disk summary data ($upset_disk_summary) in the input object")
       use_disk=F
     }
     else if (nrow(amrrules$upset_disk_summary %>% filter(marker_count>0))==0) {
-      cat("  WARNING: 'use_disk' set to TRUE but the disk summary data ($upset_disk_summary) in the input object is empty\n")
+      message("  WARNING: 'use_disk' set to TRUE but the disk summary data ($upset_disk_summary) in the input object is empty")
       use_disk=F
     }
   }
@@ -155,24 +156,24 @@ makerules <- function(amrrules, minObs=3, low_threshold=20, core_threshold=0.9,
       disk_R <- bp$breakpoint_R
       bp_standard_disk <- bp$bp_standard
     }
-    else{cat(paste("  Using user-specified disk breakpoints: S >=", disk_S,"and R <", disk_R,"\n"))}
+    else{message(paste("  Using user-specified disk breakpoints: S >=", disk_S,"and R <", disk_R))}
 
     if (is.null(disk_ecoff)) { # determine disk ECOFF
       ecoffs <- getBreakpoints(amrrules$species, guide, antibiotic, "ECOFF") %>% filter(method=="DISK")
       if (nrow(ecoffs)==0) {
-        cat("  Could not determine disk ECOFF using AMR package, using S breakpoint, consider providing your own value via 'disk_ecoff'\n")
+        message("  Could not determine disk ECOFF using AMR package, using S breakpoint, consider providing your own value via 'disk_ecoff'")
         disk_ecoff <- disk_S
       }
       else {
         disk_ecoff <- ecoffs %>% pull(breakpoint_S) %>% first()
         if (is.na(disk_ecoff)) {
-          cat("  Could not determine disk ECOFF using AMR package, using S breakpoint, consider providing your own value via 'disk_ecoff'\n")
+          message("  Could not determine disk ECOFF using AMR package, using S breakpoint, consider providing your own value via 'disk_ecoff'")
           disk_ecoff <- disk_S
         }
-        else{cat(paste("  Disk ECOFF determined using AMR package:", disk_ecoff,"\n"))}
+        else{message(paste("  Disk ECOFF determined using AMR package:", disk_ecoff))}
       }
     }
-    else{cat(paste("  Using user-specified disk ECOFF:", disk_ecoff,"\n"))}
+    else{message(paste("  Using user-specified disk ECOFF:", disk_ecoff))}
   }
 
   if (is.null(bp_standard_mic)) {bp_standard_mic <- NA}
@@ -182,28 +183,28 @@ makerules <- function(amrrules, minObs=3, low_threshold=20, core_threshold=0.9,
   # only check if parameters are null, otherwise accept what user has set
   if (is.null(expected_R)) {
     expected_R <- as.ab(antibiotic) %in% (AMR::intrinsic_resistant %>% filter(mo==as.mo(amrrules$species)) %>% pull(ab))
-    if (expected_R) {cat(paste(" ",antibiotic,"is an expected resistance for",amrrules$species,"\n"))}
-  } else if (expected_R) {cat("  User has specified this is not an expected R\n")
-  } else if (!expected_R) {cat("  User has specified this is not an expected R\n")}
+    if (expected_R) {message(paste(" ",antibiotic,"is an expected resistance for",amrrules$species))}
+  } else if (expected_R) {message("  User has specified this is not an expected R")
+  } else if (!expected_R) {message("  User has specified this is not an expected R")}
   if (is.null(expected_I)) {
     expected_I <- FALSE
     if(!expected_R) { # if expected I, the MIC S breakpoint is set to 0.001 (i.e. there is effectively no S category as all isolates exceed this value)
       if (!is.null(mic_S)) {if (mic_S==0.001) {expected_I <- TRUE}}
       if (!is.null(disk_S)) {if (disk_S==50) {expected_I <- TRUE}}
     }
-    if (expected_I) {cat(paste(" ",antibiotic,"is an expected I for",amrrules$species, "(there is no S category)\n"))}
-  } else if (expected_I) {cat("  User has specified this is not an expected I\n")
-  } else if (!expected_I) {cat("  User has specified this is not an expected I\n")}
+    if (expected_I) {message(paste(" ",antibiotic,"is an expected I for",amrrules$species, "(there is no S category)"))}
+  } else if (expected_I) {message("  User has specified this is not an expected I")
+  } else if (!expected_I) {message("  User has specified this is not an expected I")}
 
   ## load quantitative data
 
-  cat(" Loading solo PPV data\n")
+  message(" Loading solo PPV data")
 
   # solo PPV from combined mic/disk
   if (is.null(amrrules$solo_stats)) {
-    stop(paste0("amrrules object ", deparse(substitute(amrrules)), " is missing $solo_stats\n"))
+    stop(paste0("amrrules object ", deparse(substitute(amrrules)), " is missing $solo_stats"))
   } else {
-    cat("  Loading solo PPV data from primary dataset with mic/disk measures\n")
+    message("  Loading solo PPV data from primary dataset with mic/disk measures")
   }
 
   data <- amrrules$solo_stats %>%
@@ -216,7 +217,7 @@ makerules <- function(amrrules, minObs=3, low_threshold=20, core_threshold=0.9,
   if (!("NWT.solo.n" %in% colnames(data))) { data$NWT.solo.n <- 0 }
 
   if (!is.null(amrrules$solo_stats_all)) {
-    cat("  ...adding solo PPV data from extended dataset including SIR calls with no mic/disk measures\n")
+    message("  ...adding solo PPV data from extended dataset including SIR calls with no mic/disk measures")
     solo_sir <- amrrules$solo_stats_all %>%
       mutate(note=paste0(category," extended solo PPV=", round(ppv,2)*100, "% (",x,"/",n,"). ")) %>%
       pivot_wider(id_cols=marker, names_from=category, values_from=c(ppv, x, n, ci.lower, ci.upper, note),
@@ -233,9 +234,9 @@ makerules <- function(amrrules, minObs=3, low_threshold=20, core_threshold=0.9,
   # regression data
   if (regression) {
     if (!is.null(amrrules$modelR) | !is.null(amrrules$modelNWT)) {
-      cat(" Loading regression data from primary dataset with mic/disk measures\n")
+      message(" Loading regression data from primary dataset with mic/disk measures")
       if (!is.null(amrrules$modelR)) {
-        cat ("  ...R ")
+        message("  ...R ")
         logreg_data <- amrrules$modelR %>%
           filter(marker!="(Intercept)") %>%
           rename_with(~paste0("R.logreg.", .x))
@@ -244,20 +245,19 @@ makerules <- function(amrrules, minObs=3, low_threshold=20, core_threshold=0.9,
           mutate(category_logReg = if_else(category_logReg=="S" & expected_I, "I", category_logReg))
       }
       if (!is.null(amrrules$modelNWT)) {
-        cat ("  ...NWT ")
+        message("  ...NWT ")
         logreg_data <- amrrules$modelNWT %>%
           filter(marker!="(Intercept)") %>%
           rename_with(~paste0("NWT.logreg.", .x))
         data <- data %>% full_join(logreg_data, join_by(marker==NWT.logreg.marker)) %>%
           mutate(phenotype_logReg=if_else(NWT.logreg.ci.lower<0 & NWT.logreg.ci.upper>0, "WT", NA))
       }
-      cat("\n")
-    } else { cat("  No regression data found from primary dataset with mic/disk measures\n")}
+    } else { message("  No regression data found from primary dataset with mic/disk measures")}
 
     if (!is.null(amrrules$modelR_all) | !is.null(amrrules$modelNWT_all)) {
-      cat(" Loading regression data from extended dataset including SIR calls with no mic/disk measures\n")
+      message(" Loading regression data from extended dataset including SIR calls with no mic/disk measures")
       if (!is.null(amrrules$modelR_all)) {
-        cat ("  ...R ")
+        message("  ...R ")
         logreg_data <- amrrules$modelR_all %>%
           filter(marker!="(Intercept)") %>%
           rename_with(~paste0("R.logregExt.", .x))
@@ -266,19 +266,18 @@ makerules <- function(amrrules, minObs=3, low_threshold=20, core_threshold=0.9,
           mutate(category_logRegExt = if_else(category_logRegExt=="S" & expected_I, "I", category_logRegExt))
       }
       if (!is.null(amrrules$modelNWT)) {
-        cat ("  ...NWT ")
+        message("  ...NWT ")
         logreg_data <- amrrules$modelNWT %>%
           filter(marker!="(Intercept)") %>%
           rename_with(~paste0("NWT.logregExt.", .x))
         data <- data %>% full_join(logreg_data, join_by(marker==NWT.logregExt.marker)) %>%
           mutate(phenotype_logRegExt=if_else(NWT.logregExt.ci.lower<0 & NWT.logregExt.ci.upper>0, "WT", NA))
       }
-      cat("\n")
     } else {
-      cat("  No regression data found from extended dataset including SIR calls with no mic/disk measures\n")
+      message("  No regression data found from extended dataset including SIR calls with no mic/disk measures")
     }
     if (is.null(amrrules$modelR) & is.null(amrrules$modelNWT) & is.null(amrrules$modelR_all) & is.null(amrrules$modelNWT_all)) {
-      cat("  No regression data at all in input\n")
+      message("  No regression data at all in input")
       regression <- FALSE
     }
   }
@@ -290,7 +289,7 @@ makerules <- function(amrrules, minObs=3, low_threshold=20, core_threshold=0.9,
   # add MIC data (PPV, median, for each marker/combination)
 
   if (use_mic & !is.null(amrrules$upset_mic_summary)) {
-    cat(" Loading MIC data\n")
+    message(" Loading MIC data")
     # if more than half the values are expressed as ranges, ignore these and use median value calculated after excluding them
     mic_data <- amrrules$upset_mic_summary %>%
       filter(marker_list!="") %>%
@@ -317,7 +316,7 @@ makerules <- function(amrrules, minObs=3, low_threshold=20, core_threshold=0.9,
 
   # add disk data (PPV, median, for each marker/combination)
   if (use_disk & !is.null(amrrules$upset_disk_summary)) {
-    cat(" Loading disk data\n")
+    message(" Loading disk data")
     disk_data <- amrrules$upset_disk_summary %>%
       filter(marker_list!="") %>%
       rename_with(~paste0("Disk.", .x)) %>%
@@ -348,13 +347,13 @@ makerules <- function(amrrules, minObs=3, low_threshold=20, core_threshold=0.9,
 
   ## define categories and phenotypes using the collated data
 
-  cat(" Comparing clinical categories\n")
+  message(" Comparing clinical categories")
 
   ## compare calls from different analyses, note discrepancies
   # pay attention to numbers from different analyses, and if they pass minObs
   # assign call based on solo PPV first, where available
 
-  cat(" Comparing calls from different sources\n")
+  message(" Comparing calls from different sources")
 
   # set counts to zero for missing metrics
   data <- data %>%
@@ -411,7 +410,7 @@ makerules <- function(amrrules, minObs=3, low_threshold=20, core_threshold=0.9,
                     arrange(marker_count) %>%
                     pull(marker)
 
-  cat(" Defining rules for marker combinations\n")
+  message(" Defining rules for marker combinations")
   for (combo in combinations) {
 
     # get category calls from individual rules
@@ -460,14 +459,14 @@ makerules <- function(amrrules, minObs=3, low_threshold=20, core_threshold=0.9,
   # summarise sources of pheno data
   if (!is.null(amrrules$info)) {
     if ("source" %in% colnames(amrrules$info)) {
-      cat(" Enumerating sources\n")
+      message(" Enumerating sources")
       data <- enumerate_source_info(data=data, info=amrrules$info, amr_binary=amrrules$amr_binary, solo_binary=amrrules$solo_binary, column="source", use_mic=use_mic, use_disk=use_disk)
     }
     else { # these fields are used to summarise evidence limitations
       data <- add_missing_cols(data, c("solo.sources", "solo.sources.SIR", "mic.sources", "mic.sources.SIR", "mic.x.sources", "mic.x.sources.SIR", "disk.sources", "disk.sources.SIR"))
     }
   } else {
-    cat("  No info file provided, can't enumerate sources\n")
+    message("  No info file provided, can't enumerate sources")
     data <- add_missing_cols(data, c("solo.sources", "solo.sources.SIR", "mic.sources", "mic.sources.SIR", "mic.x.sources", "mic.x.sources.SIR", "disk.sources", "disk.sources.SIR"))
   }
 
@@ -484,22 +483,24 @@ makerules <- function(amrrules, minObs=3, low_threshold=20, core_threshold=0.9,
     summarise(PMID=paste(na.omit(PMID), collapse=","))
 
   # gene info for this species
-  gene_info <- amrrules$afp_hits %>%
-    left_join(pubmed, by="Gene symbol") %>%
-    #mutate(context=if_else(freq>core_threshold, "core", "accessory")) %>% # need to review wrt manual rules and hierarchy
-    #mutate(mutation=if_else(is.na(mutation), "-", mutation)) %>%
-    mutate(mutation=case_when(is.na(mutation) ~ "-",
-                              `variation type`=="Protein variant detected" ~ paste0("p.",mutation),
-                              `variation type`=="Nucleotide variant detected" ~ paste0("c.",mutation),
-                              TRUE ~ mutation)) %>%
-    mutate(marker=as.character(marker.label)) %>% # to match HGVS formatted labels in the input stats
-    ungroup() %>%
-    select(marker, freq, freq_n, mutation, node, `variation type`, PMID) %>% # exclude context
-    distinct()
+  if (amrrules$gene_symbol_col %in% colnames(amrrules$afp_hits)) {
+    gene_info <- amrrules$afp_hits %>%
+      left_join(pubmed, join_by(!!sym(amrrules$gene_symbol_col)==`Gene symbol`)) %>%
+      #mutate(context=if_else(freq>core_threshold, "core", "accessory")) %>% # need to review wrt manual rules and hierarchy
+      #mutate(mutation=if_else(is.na(mutation), "-", mutation)) %>%
+      mutate(mutation=case_when(is.na(mutation) ~ "-",
+                                `variation type`=="Protein variant detected" ~ paste0("p.",mutation),
+                                `variation type`=="Nucleotide variant detected" ~ paste0("c.",mutation),
+                                TRUE ~ mutation)) %>%
+      mutate(marker=as.character(marker.label)) %>% # to match HGVS formatted labels in the input stats
+      ungroup() %>%
+      select(marker, freq, freq_n, mutation, node, `variation type`, PMID) %>% # exclude context
+      distinct()
+  } else { message(paste0("Could not find gene symbol column (provided as amrrules$gene_symbol_col): ",amrrules$gene_symbol_col," in input: amrrules$afp_hits"))}
 
   # clean up fields as per AMRrules spec v0.6
 
-  cat(" Cleaning up fields to match AMRrules spec v0.6\n")
+  message(" Cleaning up fields to match AMRrules spec v0.6")
 
   data <- data %>% left_join(gene_info, by="marker") %>%
     mutate(gene=if_else(marker_count>1, gene, node)) %>% # pull gene from ruleID combination for combo rules, otherwise node name from gene_info

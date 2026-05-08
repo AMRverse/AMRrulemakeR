@@ -6,13 +6,13 @@
 #' It is **not** suitable for line-by-line genotype annotation or for generating complete AMR reports.
 #'
 #' @param geno_table A data frame containing AMRFinderPlus genotype output. Must include columns
-#'   `Gene symbol`, `Element subtype`, and `Name`.
+#'   `Gene symbol`, `Element subtype`, and `id`.
 #' @param rules A data frame of interpretation rules, typically derived from quantitative genotype-phenotype
 #'   associations. Must include columns `nodeID`, `mutation`, `organism`, `clinical category`, and `phenotype`.
 #' @param species A character string specifying the species of interest (in GTDB format, e.g 's_Escherichia coli',
 #' see https://gtdb.ecogenomic.org/). Only rules for this species will be applied.
 #'
-#' @return A data frame with phenotype and clinical category calls for each strain (`Name`).
+#' @return A data frame with phenotype and clinical category calls for each strain (`id`).
 #'   The result includes concatenated genotype labels and the interpretation results from applying the rules.
 #'
 #' @details
@@ -28,7 +28,7 @@
 #' calls <- test_rules_amrfp(geno_table = my_genotypes, rules = my_rules, species = "s__Escherichia coli")
 #'
 #' # compare these calls to the AST data phenotypes in a separate dataframe, `pheno_table` with SIR phenotypes in `pheno`
-#' calls_vs_pheno <- calls %>% left_join(pheno_table, join_by(Name==id))
+#' calls_vs_pheno <- calls %>% left_join(pheno_table, by="id")
 #' calls_vs_pheno %>% group_by(pheno, category) %>% count() %>% filter(pheno %in% c("S", "I", "R"))
 #' }
 #'
@@ -41,7 +41,7 @@ test_rules_amrfp <- function(geno_table, rules, species) {
 
   if (species %in% rules$organism) {
     rules <- rules %>% filter(organism==species)
-  } else { cat(" WARNING: Species provided does not exist in rules file, ignoring species\n")
+  } else { message(" WARNING: Species provided does not exist in rules file, ignoring species")
   }
 
   # phenotype is set to "REVIEW: expected I" or "REVIEW: expected R" if the category is not as expected
@@ -54,7 +54,7 @@ test_rules_amrfp <- function(geno_table, rules, species) {
     mutate(phenotype=factor(phenotype, levels=c("wildtype", "nonwildtype"), ordered=T))
 
   calls <- geno_table %>%
-    group_by(Name) %>%
+    group_by(id) %>%
     summarise(label_list=paste(marker.label, collapse=",")) %>%
     mutate(call_info = map(label_list, ~ getCall(.x, rules = rules))) %>%
     unnest(call_info, keep_empty = TRUE)

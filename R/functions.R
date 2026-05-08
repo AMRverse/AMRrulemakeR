@@ -5,10 +5,10 @@
 #' relevant genetic markers and susceptibility test results, and lists EUCAST breakpoints and ECOFFs.
 #'
 #' @param geno_table A data frame of genotypic data, including a column `drug_class` and sample IDs. Can be generated from AMRfinderplus output using `AMRgen::import_amrfp`
-#' @param pheno_table A data frame of phenotypic data, including susceptibility results and sample IDs. Required fields are `drug_agent`, `mic`, `disk`.
+#' @param pheno_table A data frame of phenotypic data, including susceptibility results and sample IDs. Required fields are `drug`, `mic`, `disk`.
 #' @param antibiotic A string naming the antibiotic of interest (eg: \code{"Ciprofloxacin"}), will be parsed using AMR::as.ab().
 #' @param drug_class_list A character vector of drug classes to include from the genotypic data (eg: \code{c("Quinolones")}).
-#' @param geno_sample_col The name of the column in \code{geno_table} that contains sample IDs (default: "Name").
+#' @param geno_sample_col The name of the column in \code{geno_table} that contains sample IDs (default: "id").
 #' @param pheno_sample_col The name of the column in \code{pheno_table} that contains sample IDs (default: "id").
 #' @param species The species for which EUCAST breakpoints should be retrieved (default: "E. coli"), will be parsed using AMR::as.mo().
 #' @param guide The guidelines to retrieve breakpoints from using the AMR package (default: "EUCAST 2025").
@@ -26,10 +26,10 @@
 #'
 #' @export
 summarise_data <- function(geno_table, pheno_table, antibiotic, drug_class_list,
-                           geno_sample_col="Name", pheno_sample_col="id", species, guide="EUCAST 2025") {
+                           geno_sample_col="id", pheno_sample_col="id", species, guide="EUCAST 2025") {
   geno_samples <- geno_table %>% pull(get(geno_sample_col)) %>% unique()
 
-  pheno_rows <- pheno_table %>% filter(drug_agent==as.ab(antibiotic))
+  pheno_rows <- pheno_table %>% filter(drug==as.ab(antibiotic))
   pheno_rows_mic <- pheno_rows %>% filter(!is.na(mic))
   pheno_rows_disk <- pheno_rows %>% filter(!is.na(disk))
   pheno_samples <- pheno_rows %>% pull(get(pheno_sample_col)) %>% unique()
@@ -527,9 +527,9 @@ checkMICranges <- function(geno_table, pheno_table, antibiotic, drug_class_list,
 
   pheno_table_micdisk <- pheno_table %>% filter(!is.na(mic) | !is.na(disk))
 
-  soloPPV_micdisk <- safe_execute(AMRgen::solo_ppv_analysis(geno_table=geno_table, pheno_table=pheno_table_micdisk, antibiotic=antibiotic, drug_class_list=drug_class_list, sir_col=sir_col, ecoff_col=ecoff_col, min=minPPV, marker_col=marker_col, icat=icat, excludeRanges = NULL))
+  soloPPV_micdisk <- safe_execute(AMRgen::solo_ppv(geno_table=geno_table, pheno_table=pheno_table_micdisk, pheno_drug=antibiotic, geno_class=drug_class_list, sir_col=sir_col, ecoff_col=ecoff_col, min=minPPV, marker_col=marker_col, icat=icat, excludeRanges = NULL))
 
-  soloPPV_micdisk_norange <- safe_execute(AMRgen::solo_ppv_analysis(geno_table=geno_table, pheno_table=pheno_table_micdisk, antibiotic=antibiotic, drug_class_list=drug_class_list, sir_col=sir_col, ecoff_col=ecoff_col, min=minPPV, marker_col=marker_col, icat=icat, excludeRanges = c("NWT", "R", "I")))
+  soloPPV_micdisk_norange <- safe_execute(AMRgen::solo_ppv(geno_table=geno_table, pheno_table=pheno_table_micdisk, pheno_drug=antibiotic, geno_class=drug_class_list, sir_col=sir_col, ecoff_col=ecoff_col, min=minPPV, marker_col=marker_col, icat=icat, excludeRanges = c("NWT", "R", "I")))
 
   compare_solo <- soloPPV_micdisk_norange$solo_stats %>% full_join(soloPPV_micdisk$solo_stats, by=c("marker", "category"), suffix=c("", ".ranges"))
 
@@ -540,23 +540,23 @@ checkMICranges <- function(geno_table, pheno_table, antibiotic, drug_class_list,
     labs(x="Excluding MICs expressed as >x", y="Including all MIC values")
 
   if (excludeRanges=="all") {
-    cat("Returning solo stats ignoring MICs expressed as ranges\n")
+    message("Returning solo stats ignoring MICs expressed as ranges")
     soloPPV_micdisk <- soloPPV_micdisk_norange # return analysis ignoring range values for R, I and NWT PPVs
   } else if (excludeRanges=="NWT") { # redo analysis ignoring range values for NWT only
-    cat("Returning solo stats that ignore MICs expressed as ranges for NWT only (I/R stats still include range values)\n")
-    soloPPV_micdisk <- safe_execute(AMRgen::solo_ppv_analysis(geno_table=geno_table, pheno_table=pheno_table_micdisk, antibiotic=antibiotic, drug_class_list=drug_class_list,
+    message("Returning solo stats that ignore MICs expressed as ranges for NWT only (I/R stats still include range values)")
+    soloPPV_micdisk <- safe_execute(AMRgen::solo_ppv(geno_table=geno_table, pheno_table=pheno_table_micdisk, pheno_drug=antibiotic, geno_class=drug_class_list,
                                                               sir_col=sir_col, ecoff_col=ecoff_col, min=minPPV, marker_col=marker_col, icat=icat, excludeRanges = c("NWT")))
 
   }
 
   marker_count <- soloPPV_micdisk$amr_binary %>% select(-any_of(c("id", "pheno", "ecoff", "mic", "disk", "R", "I", "NWT"))) %>% rowSums()
 
-  mic_plot_all <- assay_by_var(pheno_table=pheno_table_micdisk, antibiotic=antibiotic, measure="mic", facet_var="method",
+  mic_plot_all <- assay_by_var(pheno_table=pheno_table_micdisk, pheno_drug=antibiotic, measure="mic", facet_by="method",
                            species=species, bp_site=bp_site)
 
   marker_free_strains <- soloPPV_micdisk$amr_binary$id[marker_count==0]
   mic_plot_nomarkers <- assay_by_var(pheno_table_micdisk %>% filter(id %in% marker_free_strains),
-                                     antibiotic=antibiotic, measure="mic", facet_var="method",
+                                     pheno_drug=antibiotic, measure="mic", facet_by="method",
                                      species=species, bp_site=bp_site)
 
   return(list(mic_plot_nomarkers=mic_plot_nomarkers,
@@ -574,11 +574,11 @@ compare_interpretations <- function(pred, obs, antibiotic, sir_col="pheno_eucast
   if (antibiotic %in% as.ab(pred$drug)) {
     pred <- pred %>% mutate(drug=as.ab(drug)) %>% filter(drug == antibiotic)
   } else { stop(paste("Antibiotic", antibiotic, "not found in predictions input"))}
-  if (antibiotic %in% as.ab(obs$drug_agent)) {
-    obs <- obs %>% filter(drug_agent == antibiotic)
+  if (antibiotic %in% as.ab(obs$drug)) {
+    obs <- obs %>% filter(drug == antibiotic)
   } else { stop(paste("Antibiotic", antibiotic, "not found in observations input"))}
 
-  true_vs_predict <- left_join(pred, obs, join_by("Name"=="id"))
+  true_vs_predict <- left_join(pred, obs, by="id")
 
   metrics_SIR <- safe_execute(rules_concordance(true_vs_predict, "pheno_eucast", "category"))
   safe_execute(metrics_SIR$metrics <- metrics_SIR$metrics %>% mutate(outcome="R", antibiotic=ab_name(as.ab(antibiotic))))
